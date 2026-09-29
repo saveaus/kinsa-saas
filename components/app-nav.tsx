@@ -1,10 +1,10 @@
 "use client"
 
 import {
+  Activity,
   BadgeCheck,
   BookOpen,
   ChevronDown,
-  ClipboardList,
   FileDown,
   GraduationCap,
   KeyRound,
@@ -56,7 +56,7 @@ const adminPrimary: NavItem[] = [
 
 const adminReports: NavItem[] = [
   { href: "/reports", label: "Evidence", icon: FileDown },
-  { href: "/audit", label: "Audit", icon: ClipboardList },
+  { href: "/activity", label: "Activity", icon: Activity },
 ]
 
 const workerItems: NavItem[] = [

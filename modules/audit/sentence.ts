@@ -20,6 +20,7 @@ const verbs: Record<string, string> = {
   "completion.attempts_reset": "reset exam attempts",
   "certificate.downloaded": "downloaded a certificate",
   "report.exported": "exported evidence",
+  "activity.exported": "exported activity",
   "organisation.logo_updated": "updated the organisation logo",
   "organisation.logo_removed": "removed the organisation logo",
   "organisation.identity_updated": "updated business details",
