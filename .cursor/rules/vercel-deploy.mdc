@@ -5,13 +5,16 @@ alwaysApply: true
 
 # Vercel deploy target
 
-Production for this repo must use the **openara** Vercel team (`izak@openara.com.au`), never `izakjosef-gmailcoms-projects` / `izakjosef@gmail.com`.
+Production for this repo must use the **openara** Vercel team (`izak@openara.com.au` / CLI user `izak-7900`), never `izakjosef-gmailcoms-projects` / `izakjosef@gmail.com`.
 
 Before any `vercel deploy`, `vercel env`, or domain change:
 
 1. Run `node scripts/assert-vercel-target.mjs` (or `npm run vercel:check`).
-2. Confirm `.vercel/project.json` is not org `team_Tr6MBnYJHkM0PMsGobaTtZgH`.
+2. Confirm `.vercel/project.json` orgId is `team_ARCaabVk2etKS7KW82gRfPQF` (openara), not `team_Tr6MBnYJHkM0PMsGobaTtZgH`.
 3. Use `--scope openara` on CLI commands.
+4. Prefer `npm run deploy:prod` over bare `vercel deploy`.
+
+Commit authors for Git-triggered deploys must be **saveaus** (GitHub repo owner linked to openara). Commits authored as Milk-asf / izakjosef@gmail.com are blocked on this project.
 
 If the assert fails: `vercel logout && vercel login`, sign in as the openara owner, then `vercel link --yes --scope openara --project kinsa-saas`.
 
