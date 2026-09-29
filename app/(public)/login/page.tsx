@@ -2,7 +2,6 @@ import Link from "next/link"
 
 import { ActionForm } from "@/components/action-form"
 import { AuthFrame } from "@/components/auth-frame"
-import { LoginPreview } from "@/components/auth-preview"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { signInAction } from "@/modules/identity/actions"
@@ -11,7 +10,6 @@ export default function LoginPage() {
   return (
     <AuthFrame
       title="Welcome back"
-      preview={<LoginPreview />}
       aside={
         <p>
           New provider?{" "}

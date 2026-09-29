@@ -14,11 +14,12 @@ export function AuthFrame({
   title: string
   description?: string
   children: React.ReactNode
-  preview: React.ReactNode
+  preview?: React.ReactNode
   aside?: React.ReactNode
   panelEyebrow?: string
   panelCopy?: string
 }) {
+  const showPanel = Boolean(preview)
   const showPanelCopy = Boolean(panelEyebrow || panelCopy)
 
   return (
@@ -30,7 +31,11 @@ export function AuthFrame({
         <p className="hidden text-xs text-muted-foreground sm:block">Staff compliance for NDIS providers</p>
       </header>
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 items-center px-4 pb-8 sm:px-6">
-        <div className="grid w-full animate-in overflow-hidden rounded-2xl border border-black/5 bg-background shadow-[0_30px_80px_-48px_rgba(15,23,42,0.45)] fade-in duration-500 md:min-h-[600px] md:grid-cols-[minmax(0,24rem)_1fr]">
+        <div
+          className={`grid w-full animate-in overflow-hidden rounded-2xl border border-black/5 bg-background shadow-[0_30px_80px_-48px_rgba(15,23,42,0.45)] fade-in duration-500 ${
+            showPanel ? "md:min-h-[600px] md:grid-cols-[minmax(0,24rem)_1fr]" : "mx-auto max-w-md"
+          }`}
+        >
           <div className="flex flex-col justify-center px-8 py-10 sm:px-11">
             {step ? <p className="text-xs tracking-wide text-muted-foreground uppercase">{step}</p> : null}
             <h1 className="mt-1 text-[26px] leading-tight font-semibold tracking-tight text-balance">{title}</h1>
@@ -40,32 +45,34 @@ export function AuthFrame({
             <div className="mt-7 animate-in fade-in slide-in-from-bottom-1 duration-500">{children}</div>
             {aside ? <div className="mt-6 text-sm text-muted-foreground">{aside}</div> : null}
           </div>
-          <div className="relative hidden overflow-hidden md:block">
-            <div
-              aria-hidden
-              className="absolute inset-0 bg-[linear-gradient(160deg,#1f2933_0%,#334155_42%,#3f4f46_100%)]"
-            />
-            <div
-              aria-hidden
-              className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:28px_28px]"
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.14),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(125,211,168,0.18),transparent_35%)]" />
-            <div className="relative flex h-full items-center justify-center p-8 lg:p-10">
-              {showPanelCopy ? (
-                <div className="absolute top-8 left-8 max-w-sm text-white lg:top-10 lg:left-10">
-                  {panelEyebrow ? (
-                    <p className="text-[11px] tracking-[0.14em] text-white/55 uppercase">{panelEyebrow}</p>
-                  ) : null}
-                  {panelCopy ? (
-                    <p className="mt-2 text-[22px] leading-snug font-medium tracking-tight text-balance">{panelCopy}</p>
-                  ) : null}
+          {showPanel ? (
+            <div className="relative hidden overflow-hidden md:block">
+              <div
+                aria-hidden
+                className="absolute inset-0 bg-[linear-gradient(160deg,#1f2933_0%,#334155_42%,#3f4f46_100%)]"
+              />
+              <div
+                aria-hidden
+                className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:28px_28px]"
+              />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.14),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(125,211,168,0.18),transparent_35%)]" />
+              <div className="relative flex h-full items-center justify-center p-8 lg:p-10">
+                {showPanelCopy ? (
+                  <div className="absolute top-8 left-8 max-w-sm text-white lg:top-10 lg:left-10">
+                    {panelEyebrow ? (
+                      <p className="text-[11px] tracking-[0.14em] text-white/55 uppercase">{panelEyebrow}</p>
+                    ) : null}
+                    {panelCopy ? (
+                      <p className="mt-2 text-[22px] leading-snug font-medium tracking-tight text-balance">{panelCopy}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="relative w-full max-w-[560px] animate-in fade-in slide-in-from-bottom-3 duration-700">
+                  {preview}
                 </div>
-              ) : null}
-              <div className="relative w-full max-w-[560px] animate-in fade-in slide-in-from-bottom-3 duration-700">
-                {preview}
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </main>
       <footer className="relative z-10 flex justify-center gap-5 py-6 text-xs text-muted-foreground">
