@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 280" fill="none">
+  <rect width="640" height="280" rx="24" fill="#F4F7F5"/>
+  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#1F3A2E">
+    <circle cx="80" cy="120" r="36" fill="#fff" stroke="#1F7A4D" stroke-width="3"/>
+    <text x="80" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#1F7A4D">1</text>
+    <text x="80" y="180" text-anchor="middle" font-weight="600">Before touch</text>
+    <circle cx="200" cy="120" r="36" fill="#fff" stroke="#1F7A4D" stroke-width="3"/>
+    <text x="200" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#1F7A4D">2</text>
+    <text x="200" y="180" text-anchor="middle" font-weight="600">Before a clean task</text>
+    <circle cx="320" cy="120" r="36" fill="#fff" stroke="#1F7A4D" stroke-width="3"/>
+    <text x="320" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#1F7A4D">3</text>
+    <text x="320" y="180" text-anchor="middle" font-weight="600">After body fluids</text>
+    <circle cx="440" cy="120" r="36" fill="#fff" stroke="#1F7A4D" stroke-width="3"/>
+    <text x="440" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#1F7A4D">4</text>
+    <text x="440" y="180" text-anchor="middle" font-weight="600">After touch</text>
+    <circle cx="560" cy="120" r="36" fill="#fff" stroke="#1F7A4D" stroke-width="3"/>
+    <text x="560" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#1F7A4D">5</text>
+    <text x="560" y="180" text-anchor="middle" font-weight="600">After surroundings</text>
+    <text x="320" y="230" text-anchor="middle" fill="#5C6B64">Soap and water if hands are visibly soiled. Otherwise, alcohol hand rub.</text>
+  </g>
+</svg>

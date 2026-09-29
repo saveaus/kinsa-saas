@@ -1,0 +1,464 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type AppRole = "admin" | "worker"
+export type AppPermission =
+  | "workers.manage"
+  | "workers.read_all"
+  | "documents.approve"
+  | "documents.upload_own"
+  | "documents.read_all"
+  | "courses.manage"
+  | "courses.take"
+  | "reminders.manage"
+  | "reports.export"
+  | "audit.read"
+  | "settings.manage"
+
+export type DocumentApprovalStatus = "pending" | "approved" | "rejected"
+export type WorkerEmploymentStatus = "active" | "inactive"
+export type CoursePublicationStatus = "draft" | "published"
+export type EnrolmentStatus = "assigned" | "in_progress" | "completed"
+export type StaffRole = "support" | "complex_care" | "leader" | "office"
+export type ReminderCategory = "documents" | "courses"
+
+export type Database = {
+  public: {
+    Tables: {
+      organisations: {
+        Row: {
+          id: string
+          name: string
+          logo_path: string | null
+          abn: string | null
+          registration_number: string | null
+          registration_groups: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          logo_path?: string | null
+          abn?: string | null
+          registration_number?: string | null
+          registration_groups?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          logo_path?: string | null
+          abn?: string | null
+          registration_number?: string | null
+          registration_groups?: string[]
+        }
+        Relationships: []
+      }
+      users: {
+        Row: { id: string; email: string; full_name: string | null; created_at: string; updated_at: string }
+        Insert: { id: string; email: string; full_name?: string | null }
+        Update: { email?: string; full_name?: string | null }
+        Relationships: []
+      }
+      memberships: {
+        Row: { id: string; user_id: string; organisation_id: string; role: AppRole; created_at: string }
+        Insert: { user_id: string; organisation_id: string; role: AppRole }
+        Update: { role?: AppRole }
+        Relationships: []
+      }
+      role_permissions: {
+        Row: { role: AppRole; permission: AppPermission }
+        Insert: { role: AppRole; permission: AppPermission }
+        Update: { permission?: AppPermission }
+        Relationships: []
+      }
+      workers: {
+        Row: {
+          id: string
+          organisation_id: string
+          user_id: string | null
+          first_name: string
+          last_name: string
+          email: string
+          employment_status: WorkerEmploymentStatus
+          staff_roles: StaffRole[]
+          deleted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          user_id?: string | null
+          first_name: string
+          last_name: string
+          email: string
+          employment_status?: WorkerEmploymentStatus
+          staff_roles?: StaffRole[]
+        }
+        Update: {
+          first_name?: string
+          last_name?: string
+          email?: string
+          employment_status?: WorkerEmploymentStatus
+          staff_roles?: StaffRole[]
+          user_id?: string | null
+          deleted_at?: string | null
+        }
+        Relationships: []
+      }
+      document_type_versions: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          description: string | null
+          requires_expiry: boolean
+          effective_from: string
+          effective_to: string | null
+          created_at: string
+        }
+        Insert: { code: string; name: string; description?: string | null; requires_expiry?: boolean }
+        Update: { name?: string; effective_to?: string | null }
+        Relationships: []
+      }
+      organisation_document_types: {
+        Row: { organisation_id: string; document_type_version_id: string; required: boolean }
+        Insert: { organisation_id: string; document_type_version_id: string; required?: boolean }
+        Update: { required?: boolean }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          id: string
+          organisation_id: string
+          worker_id: string
+          document_type_version_id: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          expires_on: string | null
+          approval_status: DocumentApprovalStatus
+          review_note: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          worker_id: string
+          document_type_version_id: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          expires_on?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          approval_status?: DocumentApprovalStatus
+          review_note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+        }
+        Relationships: []
+      }
+      courses: {
+        Row: {
+          id: string
+          organisation_id: string
+          title: string
+          description: string | null
+          status: CoursePublicationStatus
+          pass_mark: number
+          required: boolean
+          cover_image: string | null
+          renewal_months: number | null
+          code: string | null
+          audience: string | null
+          standards: string | null
+          requirement_status: string | null
+          kind: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          title: string
+          description?: string | null
+          status?: CoursePublicationStatus
+          pass_mark?: number
+          required?: boolean
+          cover_image?: string | null
+          renewal_months?: number | null
+          code?: string | null
+          audience?: string | null
+          standards?: string | null
+          requirement_status?: string | null
+          kind?: string
+        }
+        Update: {
+          organisation_id?: string
+          title?: string
+          description?: string | null
+          status?: CoursePublicationStatus
+          pass_mark?: number
+          required?: boolean
+          cover_image?: string | null
+          renewal_months?: number | null
+          code?: string | null
+          audience?: string | null
+          standards?: string | null
+          requirement_status?: string | null
+          kind?: string
+        }
+        Relationships: []
+      }
+      course_modules: {
+        Row: {
+          id: string
+          organisation_id: string
+          course_id: string
+          title: string
+          body_markdown: string
+          sort_order: number
+          quiz: Json | null
+          content: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          course_id: string
+          title: string
+          body_markdown?: string
+          sort_order?: number
+          quiz?: Json | null
+          content?: Json | null
+        }
+        Update: {
+          organisation_id?: string
+          course_id?: string
+          title?: string
+          body_markdown?: string
+          sort_order?: number
+          quiz?: Json | null
+          content?: Json | null
+        }
+        Relationships: []
+      }
+      enrolments: {
+        Row: {
+          id: string
+          organisation_id: string
+          course_id: string
+          worker_id: string
+          status: EnrolmentStatus
+          assigned_at: string
+          completed_at: string | null
+        }
+        Insert: { organisation_id: string; course_id: string; worker_id: string }
+        Update: { status?: EnrolmentStatus; completed_at?: string | null }
+        Relationships: []
+      }
+      completions: {
+        Row: {
+          id: string
+          organisation_id: string
+          enrolment_id: string
+          course_module_id: string
+          passed: boolean
+          score: number | null
+          answers: Json | null
+          attempt_count: number
+          completed_at: string
+        }
+        Insert: {
+          organisation_id: string
+          enrolment_id: string
+          course_module_id: string
+          passed: boolean
+          score?: number | null
+          answers?: Json | null
+          attempt_count?: number
+        }
+        Update: { passed?: boolean; score?: number | null; answers?: Json | null; attempt_count?: number }
+        Relationships: []
+      }
+      lesson_progress: {
+        Row: {
+          id: string
+          organisation_id: string
+          enrolment_id: string
+          course_module_id: string
+          step_index: number
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          enrolment_id: string
+          course_module_id: string
+          step_index?: number
+        }
+        Update: { step_index?: number }
+        Relationships: []
+      }
+      course_role_requirements: {
+        Row: { organisation_id: string; course_id: string; staff_role: StaffRole }
+        Insert: { organisation_id: string; course_id: string; staff_role: StaffRole }
+        Update: { staff_role?: StaffRole }
+        Relationships: []
+      }
+      document_role_requirements: {
+        Row: { organisation_id: string; document_type_version_id: string; staff_role: StaffRole }
+        Insert: { organisation_id: string; document_type_version_id: string; staff_role: StaffRole }
+        Update: { staff_role?: StaffRole }
+        Relationships: []
+      }
+      reminder_rules: {
+        Row: {
+          id: string
+          organisation_id: string
+          category: ReminderCategory
+          days_before: number
+          subject: string
+          body_template: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          category: ReminderCategory
+          days_before: number
+          subject: string
+          body_template: string
+        }
+        Update: {
+          organisation_id?: string
+          category?: ReminderCategory
+          days_before?: number
+          subject?: string
+          body_template?: string
+        }
+        Relationships: []
+      }
+      reminder_dispatches: {
+        Row: {
+          id: string
+          organisation_id: string
+          reminder_rule_id: string
+          document_id: string | null
+          enrolment_id: string | null
+          worker_id: string
+          due_on: string
+          sent_at: string
+        }
+        Insert: {
+          organisation_id: string
+          reminder_rule_id: string
+          document_id?: string | null
+          enrolment_id?: string | null
+          worker_id: string
+          due_on: string
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      audit_events: {
+        Row: {
+          id: string
+          organisation_id: string
+          actor_user_id: string | null
+          actor_role: AppRole | null
+          action: string
+          target_type: string
+          target_id: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          organisation_id: string
+          actor_user_id?: string | null
+          actor_role?: AppRole | null
+          action: string
+          target_type: string
+          target_id?: string | null
+          metadata?: Json
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      document_access_events: {
+        Row: {
+          id: string
+          organisation_id: string
+          document_id: string
+          actor_user_id: string | null
+          action: string
+          created_at: string
+        }
+        Insert: { organisation_id: string; document_id: string; actor_user_id?: string | null; action?: string }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      invites: {
+        Row: {
+          id: string
+          organisation_id: string
+          worker_id: string | null
+          email: string
+          token_hash: string
+          expires_at: string
+          accepted_at: string | null
+          created_at: string
+          role: AppRole
+        }
+        Insert: {
+          organisation_id: string
+          worker_id?: string | null
+          email: string
+          token_hash: string
+          expires_at: string
+          role?: AppRole
+        }
+        Update: { accepted_at?: string | null }
+        Relationships: []
+      }
+    }
+    Views: Record<string, never>
+    Functions: {
+      accept_invite: { Args: { p_token_hash: string }; Returns: string }
+      check_rate_limit: { Args: { p_key: string; p_max: number; p_window_seconds: number }; Returns: boolean }
+      create_organisation: {
+        Args: { org_name: string; p_registration_groups?: string[] }
+        Returns: string
+      }
+      peek_invite: { Args: { p_token_hash: string }; Returns: { email: string; expires_at: string }[] }
+      record_audit: {
+        Args: { p_action: string; p_target_type: string; p_target_id: string; p_metadata?: Json }
+        Returns: undefined
+      }
+      anonymize_worker_audit: { Args: { p_worker_id: string }; Returns: undefined }
+    }
+    Enums: {
+      app_permission: AppPermission
+      app_role: AppRole
+      course_publication_status: CoursePublicationStatus
+      document_approval_status: DocumentApprovalStatus
+      enrolment_status: EnrolmentStatus
+      reminder_category: ReminderCategory
+      staff_role: StaffRole
+      worker_employment_status: WorkerEmploymentStatus
+    }
+    CompositeTypes: Record<string, never>
+  }
+}
