@@ -37,7 +37,10 @@ export function ActionForm({
     <form action={formAction} className={cn("grid gap-3", className)}>
       {state.error ? (
         <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
+          <AlertDescription>
+            {state.error}
+            {state.inviteUrl ? <span className="mt-1 block break-all text-xs">{state.inviteUrl}</span> : null}
+          </AlertDescription>
         </Alert>
       ) : null}
       {state.message ? (

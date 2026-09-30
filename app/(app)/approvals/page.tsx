@@ -35,7 +35,8 @@ export default async function ApprovalsPage() {
         { id: "review", label: "Review", locked: true },
       ]}
       rows={rows}
-      empty="No documents waiting for review"
+      empty="Nothing to review"
+      emptyDescription="Uploaded documents that need a decision show up here."
     />
   )
 }

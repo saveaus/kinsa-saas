@@ -1,9 +1,9 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
+import { EmptyState } from "@/components/empty-state"
 import { RecordTable } from "@/components/record-table"
 import { OverallBadge } from "@/components/status-badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requireTenant } from "@/lib/tenant"
 import { computeWorkerCompliance, type ComplianceItem } from "@/modules/documents/compliance"
 import { getLapsingWindowDays, listDocumentsForWorker, listEnabledTypes } from "@/modules/documents/queries"
@@ -17,14 +17,10 @@ export default async function MePage() {
   if (!context.workerId) {
     if (context.role === "admin") redirect("/dashboard")
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No worker profile</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Your login is not linked to a worker record yet. Ask an administrator to invite you.
-        </CardContent>
-      </Card>
+      <EmptyState
+        title="No worker profile"
+        description="Your login is not linked to a worker record yet. Ask an administrator to invite you."
+      />
     )
   }
 
@@ -130,6 +126,19 @@ function itemStatus(item: ComplianceItem) {
   }
 }
 
+function clearTitle(title: string) {
+  switch (title) {
+    case "Overdue":
+      return "Nothing overdue"
+    case "Due soon":
+      return "Nothing due soon"
+    case "Still to do":
+      return "You're up to date"
+    default:
+      return "Nothing here"
+  }
+}
+
 function AttentionList({ title, items }: { title: string; items: ComplianceItem[] }) {
   const shown = items.slice(0, 5)
   return (
@@ -139,7 +148,7 @@ function AttentionList({ title, items }: { title: string; items: ComplianceItem[
         <span className="ml-2 text-xs font-normal text-muted-foreground">{items.length}</span>
       </div>
       {shown.length === 0 ? (
-        <p className="px-3 py-3 text-sm text-muted-foreground">Nothing here.</p>
+        <EmptyState compact title={clearTitle(title)} />
       ) : (
         <ul>
           {shown.map((item) => (

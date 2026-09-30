@@ -2,8 +2,10 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import { lessonPercent } from "@/modules/training/display"
 import { libraryStepCount } from "@/modules/training/library"
+import { ensureTrainingLibrary } from "@/modules/training/provision"
 
 export async function listCourses(context: TenantContext) {
+  await ensureTrainingLibrary(context.organisationId)
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from("courses")
@@ -88,6 +90,7 @@ export async function listWorkerCourseRows(context: TenantContext, workerId: str
     const completion = (completions ?? []).find((row) => row.enrolment_id === enrolment.id)
     return {
       id: enrolment.id,
+      courseId: enrolment.course_id,
       title: course.title,
       description: course.description,
       coverImage: course.cover_image,

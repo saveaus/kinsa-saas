@@ -22,15 +22,31 @@ export async function sendInviteEmail(input: {
   workerName: string
   organisationName: string
   inviteUrl: string
-}) {
+}): Promise<{ sent: true } | { sent: false; reason: string }> {
   const resend = getResend()
-  if (!resend) return
-  await resend.emails.send({
+  if (!resend) {
+    return { sent: false, reason: "RESEND_API_KEY is not configured." }
+  }
+
+  const subject = `You're invited to ${input.organisationName} on Kinsa`
+  const text = `Hello ${input.workerName},\n\n${input.organisationName} invited you to view your staff compliance record in Kinsa.\n\nAccept the invite: ${input.inviteUrl}\n\nThis link expires in 7 days.\n`
+  const { error } = await resend.emails.send({
     from: fromAddress(),
     to: input.to,
-    subject: `You're invited to ${input.organisationName} on Kinsa`,
-    text: `Hello ${input.workerName},\n\n${input.organisationName} invited you to view your staff compliance record in Kinsa.\n\nAccept the invite: ${input.inviteUrl}\n`,
+    subject,
+    text,
+    html: `<p>Hello ${escapeHtml(input.workerName)},</p><p>${escapeHtml(input.organisationName)} invited you to view your staff compliance record in Kinsa.</p><p><a href="${escapeHtml(input.inviteUrl)}">Accept the invite</a></p><p>This link expires in 7 days.</p>`,
   })
+  if (error) return { sent: false, reason: error.message }
+  return { sent: true }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
 }
 
 export async function sendReminderEmail(input: {

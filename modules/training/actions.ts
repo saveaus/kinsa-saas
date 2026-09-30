@@ -13,7 +13,7 @@ import { courseLapsed } from "@/modules/training/renewal"
 import { parseStaffRoles } from "@/modules/workforce/roles"
 import { notifyExamAttemptsExhausted } from "@/modules/reminders/notify"
 
-export type TrainingActionState = { error?: string; message?: string }
+export type TrainingActionState = { error?: string; message?: string; assigned?: boolean }
 
 export async function updateCourseSettingsAction(
   courseId: string,
@@ -106,7 +106,7 @@ export async function enrolWorkerAction(
   revalidatePath(`/courses/${courseId}`)
   revalidatePath(`/workers/${workerId}`)
   revalidatePath("/me/courses")
-  return { message: "Assigned. They can start it from My training." }
+  return { message: "Assigned. They can start it from My courses." }
 }
 
 export async function assignCoursesAction(
@@ -139,7 +139,28 @@ export async function assignCoursesAction(
         worker_id: workerId,
       }))
   )
-  if (rows.length === 0) return { message: "Those workers are already assigned these courses." }
+  const [{ data: workerRows, error: workerError }, { data: courseRows, error: courseError }] = await Promise.all([
+    supabase
+      .from("workers")
+      .select("first_name, last_name")
+      .eq("organisation_id", context.organisationId)
+      .in("id", workerIds)
+      .is("deleted_at", null),
+    supabase.from("courses").select("title").eq("organisation_id", context.organisationId).in("id", courseIds),
+  ])
+  if (workerError) return { error: workerError.message }
+  if (courseError) return { error: courseError.message }
+
+  const courseLabel = labelList((courseRows ?? []).map((course) => course.title), "courses")
+  const workerLabel = labelList(
+    (workerRows ?? []).map((worker) => `${worker.first_name} ${worker.last_name}`.trim()),
+    "workers"
+  )
+
+  if (rows.length === 0) {
+    const verb = (courseRows ?? []).length === 1 ? "is" : "are"
+    return { assigned: true, message: `${courseLabel} ${verb} already assigned to ${workerLabel}.` }
+  }
 
   const { error } = await supabase.from("enrolments").insert(rows)
   if (error) return { error: error.message }
@@ -154,10 +175,19 @@ export async function assignCoursesAction(
   for (const workerId of workerIds) revalidatePath(`/workers/${workerId}`)
   revalidatePath("/me/courses")
   const skipped = courseIds.length * workerIds.length - rows.length
-  const assigned = `${rows.length} ${rows.length === 1 ? "assignment" : "assignments"}`
+  const lead = `Assigned ${courseLabel} to ${workerLabel}.`
   return {
-    message: skipped > 0 ? `Assigned ${assigned}. ${skipped} were already in place.` : `Assigned ${assigned}.`,
+    assigned: true,
+    message: skipped > 0 ? `${lead} Some of those courses were already in place.` : lead,
   }
+}
+
+function labelList(names: string[], fallbackPlural: string) {
+  const clean = names.map((name) => name.trim()).filter(Boolean)
+  if (clean.length === 0) return `the selected ${fallbackPlural}`
+  if (clean.length === 1) return clean[0]
+  if (clean.length === 2) return `${clean[0]} and ${clean[1]}`
+  return `${clean[0]} and ${clean.length - 1} others`
 }
 
 export async function completeModuleAction(

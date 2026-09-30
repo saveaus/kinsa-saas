@@ -6,6 +6,7 @@ import { Chip } from "@/components/chip"
 import { EXAM_ATTEMPTS } from "@/modules/training/lesson"
 import { resetExamAttemptsAction } from "@/modules/training/actions"
 import { enrolmentStatusLabel, enrolmentStatusTone, lessonPercent, renewalLabel } from "@/modules/training/display"
+import { EmptyState } from "@/components/empty-state"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requirePermission, requireTenant } from "@/lib/tenant"
@@ -91,7 +92,7 @@ export default async function CourseDetailPage({
         </CardHeader>
         <CardContent>
           {modules.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No modules yet.</p>
+            <EmptyState className="py-8" title="No modules yet" description="Course content will show up here." />
           ) : (
             <ol className="grid gap-2 text-sm">
               {modules.map((moduleRow, index) => (
@@ -130,6 +131,7 @@ export default async function CourseDetailPage({
               }
             })}
             empty="No one assigned yet"
+            emptyDescription="Assign this course and the worker will show up here."
           />
       {enrolments.some((enrolment) => progressByEnrolment.get(enrolment.id)?.locked) ? (
         <div className="grid gap-3">

@@ -9,6 +9,7 @@ import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requireAuthUser } from "@/lib/tenant"
 import { hashToken } from "@/modules/identity/token"
+import { ensureTrainingLibrary } from "@/modules/training/provision"
 
 export type AuthActionState = { error?: string; message?: string }
 
@@ -140,12 +141,18 @@ export async function createOrganisationAction(
   }
 
   const supabase = await createServerSupabase()
-  const { error } = await supabase.rpc("create_organisation", {
+  const { data: organisationId, error } = await supabase.rpc("create_organisation", {
     org_name: name,
     p_registration_groups: registrationGroups,
   })
-  if (error) {
-    return { error: error.message }
+  if (error || !organisationId) {
+    return { error: error?.message ?? "Could not create the organisation." }
+  }
+
+  try {
+    await ensureTrainingLibrary(organisationId)
+  } catch (libraryError) {
+    console.error("training library", libraryError)
   }
 
   redirect("/dashboard")

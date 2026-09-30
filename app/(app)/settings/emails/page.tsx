@@ -67,6 +67,7 @@ export default async function AutomaticEmailsPage({
           }
         })}
         empty="No follow-ups"
+        emptyDescription="Reminder rules for documents and courses show up here."
       />
       <div className="grid gap-3">
         <RecordTable
@@ -97,6 +98,7 @@ export default async function AutomaticEmailsPage({
             }
           })}
           empty="No emails sent yet"
+          emptyDescription="Sent reminders will show up here."
         />
         {page > 1 || hasMore ? (
           <div className="flex justify-end gap-2">

@@ -116,6 +116,9 @@ export default async function ActivityPage({
         ]}
         rows={rows}
         empty={selectedDay ? "No activity on this day" : "No activity yet"}
+        emptyDescription={
+          selectedDay ? "Pick another day, or view every day." : "Changes across the organisation show up here."
+        }
       />
       {truncated ? (
         <p className="text-xs text-muted-foreground">Showing the latest 5,000 events. Export CSV for the same window.</p>

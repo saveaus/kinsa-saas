@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { Chip, type ChipTone } from "@/components/chip"
+import { EmptyState } from "@/components/empty-state"
 import { DocumentViewButton } from "@/components/document-view-button"
 import { EditReminderRuleButton } from "@/components/reminder-rule-actions"
 import { CourseSettingsButton } from "@/components/course-settings-actions"
@@ -242,6 +243,7 @@ export function RecordTable({
   rows,
   actions,
   empty = "No records",
+  emptyDescription,
   selectable = false,
   selectedIds,
   onSelectedChange,
@@ -254,6 +256,7 @@ export function RecordTable({
   rows: RecordRow[]
   actions?: React.ReactNode
   empty?: string
+  emptyDescription?: string
   selectable?: boolean
   selectedIds?: string[]
   onSelectedChange?: (ids: string[]) => void
@@ -636,9 +639,11 @@ export function RecordTable({
             </label>
           ) : null}
           {visibleRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {search.trim() || filters.length > 0 ? "No records match." : empty}
-            </p>
+            rows.length > 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">No records match.</p>
+            ) : (
+              <EmptyState title={empty} description={emptyDescription} className="py-12" />
+            )
           ) : (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
               {pageRows.map((row) => (
@@ -716,8 +721,12 @@ export function RecordTable({
           <tbody>
             {visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={visibleIds.length + (selectable ? 1 : 0)} className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  {search.trim() || filters.length > 0 ? "No records match." : empty}
+                <td colSpan={visibleIds.length + (selectable ? 1 : 0)}>
+                  {rows.length > 0 ? (
+                    <p className="px-3 py-10 text-center text-sm text-muted-foreground">No records match.</p>
+                  ) : (
+                    <EmptyState title={empty} description={emptyDescription} className="py-12" />
+                  )}
                 </td>
               </tr>
             ) : (

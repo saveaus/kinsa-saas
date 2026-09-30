@@ -52,6 +52,7 @@ const adminPrimary: NavItem[] = [
   { href: "/workers", label: "Workers", icon: Users },
   { href: "/approvals", label: "Approvals", icon: BadgeCheck },
   { href: "/courses", label: "Courses", icon: BookOpen },
+  { href: "/me/courses", label: "My courses", icon: GraduationCap },
 ]
 
 const adminReports: NavItem[] = [
@@ -62,7 +63,7 @@ const adminReports: NavItem[] = [
 const workerItems: NavItem[] = [
   { href: "/me", label: "Compliance", icon: Shield },
   { href: "/me/documents", label: "Documents", icon: BadgeCheck },
-  { href: "/me/courses", label: "Courses", icon: BookOpen },
+  { href: "/me/courses", label: "My courses", icon: GraduationCap },
 ]
 
 function isActive(pathname: string, href: string) {
@@ -204,10 +205,7 @@ export function AppFooterNav({ admin }: { admin: boolean }) {
   const pathname = usePathname()
   if (!admin) return null
 
-  const items: NavItem[] = [
-    { href: "/me/courses", label: "My training", icon: GraduationCap },
-    { href: "/settings/general", label: "Settings", icon: Settings },
-  ]
+  const items: NavItem[] = [{ href: "/settings/general", label: "Settings", icon: Settings }]
 
   return (
     <SidebarGroup className="p-0">

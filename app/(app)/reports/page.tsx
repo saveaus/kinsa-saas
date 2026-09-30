@@ -46,6 +46,7 @@ export default async function ReportsPage() {
         ]}
         rows={rows}
         empty="No workers to export"
+        emptyDescription="Add a worker and their evidence can be exported from here."
       />
     </div>
   )

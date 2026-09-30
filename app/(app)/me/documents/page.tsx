@@ -49,6 +49,7 @@ export default async function MyDocumentsPage() {
           }
         })}
         empty="No documents"
+        emptyDescription="Upload a PDF or photo below. It waits for review."
       />
       <ActionForm action={uploadDocumentAction.bind(null, context.workerId)} submitLabel="Upload">
         <div className="grid gap-1.5">

@@ -1,4 +1,7 @@
+import { BookOpen } from "lucide-react"
+
 import { CourseCatalogue } from "@/components/course-catalogue"
+import { EmptyState } from "@/components/empty-state"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { listCourses } from "@/modules/training/queries"
 import { listWorkers } from "@/modules/workers/queries"
@@ -6,10 +9,23 @@ import { listWorkers } from "@/modules/workers/queries"
 export default async function CoursesPage() {
   const { context } = await requireTenant()
   requirePermission(context, "courses.manage")
-  const [courses, workers] = await Promise.all([listCourses(context), listWorkers(context)])
+  let courses: Awaited<ReturnType<typeof listCourses>>
+  try {
+    courses = await listCourses(context)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The course library could not be loaded."
+    return <p className="text-sm text-muted-foreground">{message}</p>
+  }
+  const workers = await listWorkers(context)
 
   if (courses.length === 0) {
-    return <p className="text-sm text-muted-foreground">No courses yet.</p>
+    return (
+      <EmptyState
+        icon={<BookOpen className="size-4" />}
+        title="No courses yet"
+        description="The course library will show up here once it is ready."
+      />
+    )
   }
 
   return (

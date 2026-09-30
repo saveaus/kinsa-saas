@@ -138,7 +138,7 @@ export default async function DashboardPage({
           <div>
             <h2 className="font-heading text-lg">Get your organisation ready</h2>
             <p className="text-sm text-muted-foreground">
-              Add people, set what each role needs, then turn on follow-up emails.
+              Your course library is in Courses. Add people, set what each role needs, then turn on follow-up emails.
             </p>
           </div>
           <ol className="grid gap-2 text-sm">
@@ -155,10 +155,10 @@ export default async function DashboardPage({
               <span className="text-muted-foreground"> — which documents each role must hold</span>
             </li>
             <li>
-              <Link href="/settings/courses" className="font-medium underline-offset-2 hover:underline">
-                3. Assign courses
+              <Link href="/courses" className="font-medium underline-offset-2 hover:underline">
+                3. Open the course library
               </Link>
-              <span className="text-muted-foreground"> — renewals and required roles</span>
+              <span className="text-muted-foreground"> — browse and assign the courses already set up</span>
             </li>
             <li>
               <Link href="/settings/emails" className="font-medium underline-offset-2 hover:underline">

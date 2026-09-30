@@ -164,13 +164,22 @@ export async function inviteWorkerAction(
   if (error) return { error: error.message }
 
   const inviteUrl = `${appUrl()}/invite/${token}`
-  await sendInviteEmail({
+  const delivery = await sendInviteEmail({
     to: worker.email,
     workerName: `${worker.first_name} ${worker.last_name}`,
     organisationName: context.organisationName,
     inviteUrl,
   })
-  await recordAudit("worker.invited", "worker", workerId, { email: worker.email })
+  await recordAudit("worker.invited", "worker", workerId, { email: worker.email, emailed: delivery.sent })
   revalidatePath(`/workers/${workerId}`)
-  return { message: "Invite created.", inviteUrl }
+  if (!delivery.sent) {
+    const needsDomain = delivery.reason.toLowerCase().includes("verify a domain")
+    return {
+      error: needsDomain
+        ? `The invite for ${worker.email} is saved, but Resend can only email your own address until a sending domain is verified. Verify a domain in Resend, then set RESEND_FROM_EMAIL to an address on that domain. Share this link until then.`
+        : `The invite was saved, but the email to ${worker.email} was not sent. ${delivery.reason}`,
+      inviteUrl,
+    }
+  }
+  return { message: `Invite emailed to ${worker.email}.` }
 }

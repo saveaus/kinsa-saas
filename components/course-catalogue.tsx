@@ -1,5 +1,6 @@
 "use client"
 
+import { Check } from "lucide-react"
 import { useActionState, useState } from "react"
 
 import { CourseCard } from "@/components/course-card"
@@ -47,6 +48,8 @@ export function CourseCatalogue({
 }) {
   const [selected, setSelected] = useState<string[]>([])
   const [assignOpen, setAssignOpen] = useState(false)
+  const [formKey, setFormKey] = useState(0)
+  const [notice, setNotice] = useState<string | null>(null)
   const selectedCourses = courses.filter((course) => selected.includes(course.id))
 
   const rows: RecordRow[] = courses.map((course) => ({
@@ -74,13 +77,27 @@ export function CourseCatalogue({
 
   return (
     <>
+      {notice ? (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-[#E7F6D9] px-3 py-2 text-sm text-[#3C7A28] dark:bg-[#1C3320] dark:text-[#A8D99A]">
+          <Check className="mt-0.5 size-4 shrink-0" />
+          <p>{notice}</p>
+        </div>
+      ) : null}
       <RecordTable
         title="All courses"
         selectable
         selectedIds={selected}
         onSelectedChange={setSelected}
         actions={
-          <Button type="button" size="sm" disabled={selected.length === 0} onClick={() => setAssignOpen(true)}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={selected.length === 0}
+            onClick={() => {
+              setFormKey((key) => key + 1)
+              setAssignOpen(true)
+            }}
+          >
             {selected.length === 0
               ? "Assign"
               : `Assign ${selected.length} ${selected.length === 1 ? "course" : "courses"}`}
@@ -143,11 +160,15 @@ export function CourseCatalogue({
         }}
       />
       <AssignDialog
+        key={formKey}
         open={assignOpen}
         courses={selectedCourses}
         workers={workers}
         onOpenChange={setAssignOpen}
-        onAssigned={() => setSelected([])}
+        onAssigned={(message) => {
+          setSelected([])
+          setNotice(message)
+        }}
       />
     </>
   )
@@ -164,71 +185,115 @@ function AssignDialog({
   courses: CatalogueCourse[]
   workers: CatalogueWorker[]
   onOpenChange: (open: boolean) => void
-  onAssigned: () => void
+  onAssigned: (message: string) => void
 }) {
   const [state, action, pending] = useActionState(assignCoursesAction, {})
   const [workerQuery, setWorkerQuery] = useState("")
+  const [picked, setPicked] = useState<string[]>([])
   const needle = workerQuery.trim().toLowerCase()
   const shownWorkers = workers.filter((worker) => {
     if (!needle) return true
     return `${worker.firstName} ${worker.lastName}`.toLowerCase().includes(needle)
   })
+  const pickedWorkers = workers.filter((worker) => picked.includes(worker.id))
+  const assignLabel =
+    pickedWorkers.length === 0
+      ? "Assign"
+      : pickedWorkers.length === 1
+        ? `Assign to ${pickedWorkers[0].firstName} ${pickedWorkers[0].lastName}`
+        : `Assign to ${pickedWorkers.length} workers`
+
+  function finish(message: string) {
+    onAssigned(message)
+    onOpenChange(false)
+  }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && state.message) onAssigned()
+        if (!next && state.assigned && state.message) onAssigned(state.message)
         onOpenChange(next)
       }}
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Assign courses</DialogTitle>
-          <DialogDescription>
-            {courses.length} {courses.length === 1 ? "course" : "courses"} will show on each selected worker’s profile and in My training.
-          </DialogDescription>
-        </DialogHeader>
-        <form action={action} className="grid gap-3">
-          {courses.map((course) => (
-            <input key={course.id} type="hidden" name="course_id" value={course.id} />
-          ))}
-          {state.error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{state.error}</AlertDescription>
-            </Alert>
-          ) : null}
-          {state.message ? (
-            <Alert>
-              <AlertDescription>{state.message}</AlertDescription>
-            </Alert>
-          ) : null}
-          <Input
-            value={workerQuery}
-            onChange={(event) => setWorkerQuery(event.target.value)}
-            placeholder="Search workers"
-            aria-label="Search workers"
-          />
-          <div className="grid max-h-64 gap-1 overflow-y-auto">
-            {workers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Add a worker before assigning courses.</p>
-            ) : shownWorkers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No workers match that search.</p>
-            ) : (
-              shownWorkers.map((worker) => (
-                <label key={worker.id} className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm hover:bg-muted">
-                  <input type="checkbox" name="worker_id" value={worker.id} className="size-4" />
-                  {worker.firstName} {worker.lastName}
-                </label>
-              ))
-            )}
+        {state.assigned && state.message ? (
+          <div className="grid gap-4 pt-2">
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E7F6D9] text-[#3C7A28] dark:bg-[#1C3320] dark:text-[#A8D99A]">
+                <Check className="size-4" />
+              </span>
+              <div className="grid gap-1">
+                <DialogTitle>Assigned</DialogTitle>
+                <p className="text-sm text-muted-foreground">{state.message}</p>
+                <p className="text-sm text-muted-foreground">It shows on their profile and in My courses.</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" onClick={() => finish(state.message ?? "Assigned.")}>
+                Done
+              </Button>
+            </DialogFooter>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={pending || workers.length === 0 || courses.length === 0}>
-              {pending ? "Assigning..." : "Assign"}
-            </Button>
-          </DialogFooter>
-        </form>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Assign courses</DialogTitle>
+              <DialogDescription>
+                {courses.length === 1 ? courses[0].title : `${courses.length} courses`} will show on each selected
+                worker’s profile and in My courses.
+              </DialogDescription>
+            </DialogHeader>
+            <form action={action} className="grid gap-3">
+              {courses.map((course) => (
+                <input key={course.id} type="hidden" name="course_id" value={course.id} />
+              ))}
+              {state.error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{state.error}</AlertDescription>
+                </Alert>
+              ) : null}
+              <Input
+                value={workerQuery}
+                onChange={(event) => setWorkerQuery(event.target.value)}
+                placeholder="Search workers"
+                aria-label="Search workers"
+              />
+              <div className="grid max-h-64 gap-1 overflow-y-auto">
+                {workers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Add a worker before assigning courses.</p>
+                ) : shownWorkers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No workers match that search.</p>
+                ) : (
+                  shownWorkers.map((worker) => (
+                    <label key={worker.id} className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        name="worker_id"
+                        value={worker.id}
+                        className="size-4"
+                        checked={picked.includes(worker.id)}
+                        onChange={(event) =>
+                          setPicked((current) =>
+                            event.target.checked
+                              ? [...current, worker.id]
+                              : current.filter((id) => id !== worker.id)
+                          )
+                        }
+                      />
+                      {worker.firstName} {worker.lastName}
+                    </label>
+                  ))
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={pending || picked.length === 0 || courses.length === 0}>
+                  {pending ? "Assigning..." : assignLabel}
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

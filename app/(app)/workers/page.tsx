@@ -73,7 +73,8 @@ export default async function WorkersPage() {
       ]}
       rows={rows}
       initialFilters={[{ columnId: "employment", operator: "is", value: "Active" }]}
-      empty="No workers yet. Add a worker to start tracking evidence."
+      empty="No workers yet"
+      emptyDescription="Add a worker to start tracking evidence."
     />
   )
 }

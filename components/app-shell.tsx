@@ -51,11 +51,13 @@ export function AppShell({
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset className="min-w-0">
-        <header className="flex h-12 items-center px-2 md:hidden">
+      <SidebarInset className="h-svh max-h-svh min-w-0 overflow-hidden">
+        <header className="flex h-12 shrink-0 items-center px-2 md:hidden">
           <SidebarTrigger />
         </header>
-        <div className="w-full min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">{children}</div>
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 has-[[data-worker-record]]:overflow-hidden has-[[data-worker-record]]:p-0 md:p-6 md:has-[[data-worker-record]]:p-0">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

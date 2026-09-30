@@ -59,7 +59,8 @@ export default async function CourseSettingsPage() {
           { id: "edit", label: "", locked: true },
         ]}
         rows={rows}
-        empty="No courses yet."
+        empty="No courses yet"
+        emptyDescription="Courses for this organisation will show up here."
       />
     </div>
   )
