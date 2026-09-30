@@ -23,7 +23,9 @@ This product helps providers organise evidence. It does not guarantee an audit o
 1. Push `main` to GitHub and import the repo in Vercel (region `syd1` is set in `vercel.json`)
 2. Set production env vars from `.env.example`. Use the real site URL for `NEXT_PUBLIC_APP_URL`
 3. Set a strong `CRON_SECRET` and the Supabase secret key so `/api/cron/reminders` can run
-4. In Supabase Auth → URL configuration, add the production site URL and allow redirects to `/login`, `/reset-password`, and `/invite/*`
+4. In Supabase Auth → URL configuration:
+   - Site URL: `https://app-kinsa.com.au`
+   - Redirect URLs: `https://app-kinsa.com.au/**` and `http://localhost:3000/**` (for local dev)
 5. Add `RESEND_API_KEY` / `RESEND_FROM_EMAIL` when email should go live
 
 ## Isolation

@@ -3,7 +3,7 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { appUrl } from "@/lib/env"
+import { resolveAppUrl } from "@/lib/env"
 import { parseRegistrationGroups } from "@/lib/ndis-registration-groups"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
@@ -15,6 +15,13 @@ export type AuthActionState = { error?: string; message?: string }
 async function clientIp() {
   const headerStore = await headers()
   return headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
+}
+
+async function requestAppUrl() {
+  const headerStore = await headers()
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host")
+  const proto = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https")
+  return resolveAppUrl(host ? `${proto}://${host}` : null)
 }
 
 export async function signInAction(
@@ -54,12 +61,13 @@ export async function signUpAction(
   await assertRateLimit(`signup:${email}:${await clientIp()}`, 5, 600)
 
   const supabase = await createServerSupabase()
+  const origin = await requestAppUrl()
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: `${appUrl()}/login`,
+      emailRedirectTo: `${origin}/login`,
     },
   })
 
@@ -90,8 +98,9 @@ export async function requestPasswordResetAction(
   await assertRateLimit(`reset:${email}:${await clientIp()}`, 5, 600)
 
   const supabase = await createServerSupabase()
+  const origin = await requestAppUrl()
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${appUrl()}/reset-password`,
+    redirectTo: `${origin}/reset-password`,
   })
   if (error) return { error: error.message }
   return { message: "If that email has an account, a reset link is on its way." }
@@ -161,10 +170,14 @@ export async function acceptInviteAction(
   const { data: existing } = await supabase.auth.getUser()
 
   if (!existing.user) {
+    const origin = await requestAppUrl()
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: `${origin}/login`,
+      },
     })
     if (error) {
       const signedIn = await supabase.auth.signInWithPassword({ email, password })
