@@ -2,6 +2,30 @@
 
 import { useEffect, useRef, useState } from "react"
 
+type PdfjsApi = {
+  GlobalWorkerOptions: { workerSrc: string }
+  getDocument: (source: { data: Uint8Array }) => {
+    promise: Promise<PdfDocument>
+    destroy: () => Promise<void>
+  }
+}
+
+type PdfDocument = {
+  numPages: number
+  getPage: (pageNumber: number) => Promise<PdfPage>
+}
+
+type PdfPage = {
+  getViewport: (params: { scale: number }) => { width: number; height: number }
+  render: (params: {
+    canvas: HTMLCanvasElement
+    viewport: { width: number; height: number }
+    intent: string
+  }) => { promise: Promise<void> }
+}
+
+const pdfjsUrl = "/pdfjs/pdf.mjs"
+
 export function PolicyPdf({
   url,
   pageLimit,
@@ -15,17 +39,18 @@ export function PolicyPdf({
   const [message, setMessage] = useState("Opening the file…")
 
   useEffect(() => {
-    const target = frame.current
-    if (!target) return
+    const current = frame.current
+    if (!current) return
+    const host: HTMLDivElement = current
     let cancelled = false
-    let loading: { destroy: () => Promise<void> } | null = null
+    let loading: ReturnType<PdfjsApi["getDocument"]> | null = null
 
     async function open() {
       const pdfjs = (await import(
         /* webpackIgnore: true */
         /* @vite-ignore */
-        "/pdfjs/pdf.mjs"
-      )) as typeof import("pdfjs-dist")
+        pdfjsUrl
+      )) as PdfjsApi
       if (cancelled) return
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs"
       const response = await fetch(url)
@@ -35,7 +60,7 @@ export function PolicyPdf({
       loading = pdfjs.getDocument({ data })
       const pdf = await loading.promise
       if (cancelled) return
-      target.replaceChildren()
+      host.replaceChildren()
       const lastPage = pageLimit
         ? Math.min(pageLimit, pdf.numPages)
         : pdf.numPages
@@ -47,7 +72,7 @@ export function PolicyPdf({
         canvas.width = viewport.width
         canvas.height = viewport.height
         canvas.className = canvasClassName
-        target.append(canvas)
+        host.append(canvas)
         // Display rendering waits on animation frames and stays blank when
         // those frames never run. Print draws the page immediately.
         await page.render({ canvas, viewport, intent: "print" }).promise
@@ -58,7 +83,9 @@ export function PolicyPdf({
 
     open().catch((reason: unknown) => {
       if (!cancelled) {
-        setMessage(reason instanceof Error ? reason.message : "Could not open this file.")
+        setMessage(
+          reason instanceof Error ? reason.message : "Could not open this file."
+        )
       }
     })
 
@@ -70,7 +97,9 @@ export function PolicyPdf({
 
   return (
     <div className="grid gap-3">
-      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      {message ? (
+        <p className="text-sm text-muted-foreground">{message}</p>
+      ) : null}
       <div ref={frame} className="grid gap-3" />
     </div>
   )
