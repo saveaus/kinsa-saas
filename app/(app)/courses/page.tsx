@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react"
 import { CourseCatalogue } from "@/components/course-catalogue"
 import { EmptyState } from "@/components/empty-state"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { catalogueParentCode } from "@/modules/training/library"
 import { listCourses } from "@/modules/training/queries"
 import { listWorkers } from "@/modules/workers/queries"
 
@@ -42,6 +43,7 @@ export default async function CoursesPage() {
         renewal_months: course.renewal_months,
         kind: course.kind,
         audience: course.audience,
+        parentCode: catalogueParentCode(course.code),
       }))}
       workers={workers.map((worker) => ({
         id: worker.id,

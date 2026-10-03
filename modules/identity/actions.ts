@@ -3,12 +3,13 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { resolveAppUrl } from "@/lib/env"
+import { requestAppUrl } from "@/lib/request-app-url"
 import { parseRegistrationGroups } from "@/lib/ndis-registration-groups"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requireAuthUser } from "@/lib/tenant"
 import { hashToken } from "@/modules/identity/token"
+import { peekInvite } from "@/modules/identity/queries"
 import { ensureTrainingLibrary } from "@/modules/training/provision"
 
 export type AuthActionState = { error?: string; message?: string }
@@ -18,18 +19,13 @@ async function clientIp() {
   return headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
 }
 
-async function requestAppUrl() {
-  const headerStore = await headers()
-  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host")
-  const proto = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https")
-  return resolveAppUrl(host ? `${proto}://${host}` : null)
-}
-
 export async function signInAction(
   _prev: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
   const password = String(formData.get("password") ?? "")
 
   if (!email || !password) {
@@ -51,12 +47,16 @@ export async function signUpAction(
   _prev: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
   const password = String(formData.get("password") ?? "")
   const fullName = String(formData.get("full_name") ?? "").trim()
 
   if (!email || !password || password.length < 8) {
-    return { error: "Use a valid email and a password of at least 8 characters." }
+    return {
+      error: "Use a valid email and a password of at least 8 characters.",
+    }
   }
 
   await assertRateLimit(`signup:${email}:${await clientIp()}`, 5, 600)
@@ -77,7 +77,9 @@ export async function signUpAction(
   }
 
   if (!data.session) {
-    return { message: "Check your email to confirm your account, then sign in." }
+    return {
+      message: "Check your email to confirm your account, then sign in.",
+    }
   }
 
   redirect("/onboarding")
@@ -93,7 +95,9 @@ export async function requestPasswordResetAction(
   _prev: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
   if (!email) return { error: "Email is required." }
 
   await assertRateLimit(`reset:${email}:${await clientIp()}`, 5, 600)
@@ -104,7 +108,9 @@ export async function requestPasswordResetAction(
     redirectTo: `${origin}/reset-password`,
   })
   if (error) return { error: error.message }
-  return { message: "If that email has an account, a reset link is on its way." }
+  return {
+    message: "If that email has an account, a reset link is on its way.",
+  }
 }
 
 export async function updatePasswordAction(
@@ -114,7 +120,8 @@ export async function updatePasswordAction(
   await requireAuthUser()
   const password = String(formData.get("password") ?? "")
   const confirm = String(formData.get("confirm") ?? "")
-  if (password.length < 8) return { error: "Use a password of at least 8 characters." }
+  if (password.length < 8)
+    return { error: "Use a password of at least 8 characters." }
   if (password !== confirm) return { error: "Passwords do not match." }
 
   await assertRateLimit(`password:${await clientIp()}`, 8, 600)
@@ -141,10 +148,13 @@ export async function createOrganisationAction(
   }
 
   const supabase = await createServerSupabase()
-  const { data: organisationId, error } = await supabase.rpc("create_organisation", {
-    org_name: name,
-    p_registration_groups: registrationGroups,
-  })
+  const { data: organisationId, error } = await supabase.rpc(
+    "create_organisation",
+    {
+      org_name: name,
+      p_registration_groups: registrationGroups,
+    }
+  )
   if (error || !organisationId) {
     return { error: error?.message ?? "Could not create the organisation." }
   }
@@ -163,12 +173,16 @@ export async function acceptInviteAction(
   _prev: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
   const password = String(formData.get("password") ?? "")
   const fullName = String(formData.get("full_name") ?? "").trim()
 
-  if (!email || !password || password.length < 8) {
-    return { error: "Use the invited email and a password of at least 8 characters." }
+  const invite = await peekInvite(token)
+  if (!invite) return { error: "This invite is invalid or has expired." }
+  if (email !== String(invite.email).toLowerCase()) {
+    return { error: "Use the email address this invite was sent to." }
   }
 
   await assertRateLimit(`invite:${token}:${await clientIp()}`, 8, 600)
@@ -176,20 +190,40 @@ export async function acceptInviteAction(
   const supabase = await createServerSupabase()
   const { data: existing } = await supabase.auth.getUser()
 
+  if (existing.user && existing.user.email?.toLowerCase() !== email) {
+    return { error: "Sign out, then open this invite with the invited email." }
+  }
+
   if (!existing.user) {
+    if (!password || password.length < 8) {
+      return { error: "Use a password of at least 8 characters." }
+    }
     const origin = await requestAppUrl()
-    const { error } = await supabase.auth.signUp({
+    const signedUp = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${origin}/login`,
+        emailRedirectTo: `${origin}/invite/${token}`,
       },
     })
-    if (error) {
-      const signedIn = await supabase.auth.signInWithPassword({ email, password })
-      if (signedIn.error) {
-        return { error: error.message }
+    if (signedUp.error) {
+      const signedIn = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (signedIn.error) return { error: signedUp.error.message }
+    } else if (!signedUp.data.session) {
+      const identities = signedUp.data.user?.identities ?? []
+      if (signedUp.data.user && identities.length === 0) {
+        return {
+          error:
+            "An account with this email already exists. Sign in, then open this invite again.",
+        }
+      }
+      return {
+        message:
+          "Confirm the email we just sent. Open it in this browser, and you will come back here to join.",
       }
     }
   }

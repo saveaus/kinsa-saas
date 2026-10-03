@@ -28,11 +28,10 @@ export function AuthFrame({
         <Link href="/" className="text-[15px] font-semibold tracking-tight">
           Kinsa
         </Link>
-        <p className="hidden text-xs text-muted-foreground sm:block">Staff compliance for NDIS providers</p>
       </header>
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 items-center px-4 pb-8 sm:px-6">
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6">
         <div
-          className={`grid w-full animate-in overflow-hidden rounded-2xl border border-black/5 bg-background shadow-[0_30px_80px_-48px_rgba(15,23,42,0.45)] fade-in duration-500 ${
+          className={`my-auto grid w-full animate-in overflow-hidden rounded-2xl border border-black/5 bg-background shadow-[0_30px_80px_-48px_rgba(15,23,42,0.45)] fade-in duration-500 ${
             showPanel ? "md:min-h-[600px] md:grid-cols-[minmax(0,24rem)_1fr]" : "mx-auto max-w-md"
           }`}
         >

@@ -6,10 +6,14 @@ import {
   SidebarFooter,
   SidebarInset,
   SidebarProvider,
-  SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { AppFooterNav, AppNav, WorkspaceHeader } from "@/components/app-nav"
+import {
+  AppFooterNav,
+  AppNav,
+  CollapsedSidebarTrigger,
+  WorkspaceHeader,
+} from "@/components/app-nav"
 import { can, type TenantContext } from "@/lib/tenant"
 import { signOutAction } from "@/modules/identity/actions"
 
@@ -31,7 +35,11 @@ export function AppShell({
   return (
     <SidebarProvider>
       <Sidebar>
-        <WorkspaceHeader name={context.organisationName} logoUrl={context.organisationLogoUrl} admin={admin} />
+        <WorkspaceHeader
+          name={context.organisationName}
+          logoUrl={context.organisationLogoUrl}
+          admin={admin}
+        />
         <SidebarContent>
           <AppNav admin={admin} />
         </SidebarContent>
@@ -39,19 +47,28 @@ export function AppShell({
           <AppFooterNav admin={admin} />
           <div className="flex items-center gap-2 px-2">
             <Avatar className="size-6">
-              <AvatarFallback className="text-[10px]">{initials || "U"}</AvatarFallback>
+              <AvatarFallback className="text-[10px]">
+                {initials || "U"}
+              </AvatarFallback>
             </Avatar>
-            <p className="min-w-0 flex-1 truncate text-xs">{context.fullName ?? context.email}</p>
+            <p className="min-w-0 flex-1 truncate text-xs">
+              {context.fullName ?? context.email}
+            </p>
             <form action={signOutAction}>
-              <Button type="submit" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground"
+              >
                 Sign out
               </Button>
             </form>
           </div>
         </SidebarFooter>
-        <SidebarRail />
       </Sidebar>
       <SidebarInset className="h-svh max-h-svh min-w-0 overflow-hidden">
+        <CollapsedSidebarTrigger />
         <header className="flex h-12 shrink-0 items-center px-2 md:hidden">
           <SidebarTrigger />
         </header>

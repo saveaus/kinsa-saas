@@ -1,6 +1,7 @@
 import type { Json } from "@/lib/database.types"
 import { createAdminSupabase } from "@/lib/supabase/admin"
 import catalogueJson from "@/modules/training/library/catalogue.json"
+import { registrationCourses } from "@/modules/training/library/registration-courses"
 import { rolesForCatalogue } from "@/modules/training/catalogue-roles"
 import type { StaffRole } from "@/modules/workforce/roles"
 
@@ -21,11 +22,20 @@ type CatalogueItem = {
   lesson: Json
 }
 
-const catalogue = catalogueJson as CatalogueItem[]
+const catalogue = [
+  ...(catalogueJson as CatalogueItem[]),
+  ...(registrationCourses as unknown as CatalogueItem[]),
+]
 const readyOrganisations = new Set<string>()
 
 function asKind(kind: string): CatalogueKind {
-  if (kind === "bite" || kind === "checkpoint" || kind === "hub" || kind === "course") return kind
+  if (
+    kind === "bite" ||
+    kind === "checkpoint" ||
+    kind === "hub" ||
+    kind === "course"
+  )
+    return kind
   return "course"
 }
 
@@ -40,7 +50,10 @@ export async function ensureTrainingLibrary(organisationId: string) {
   if (existingError) throw new Error(existingError.message)
 
   const rows = existing ?? []
-  const illustrated = rows.find((course) => course.title === "Infection prevention and control" && !course.code)
+  const illustrated = rows.find(
+    (course) =>
+      course.title === "Infection prevention and control" && !course.code
+  )
   if (illustrated) {
     const spec = catalogue.find((item) => item.code === "SE-05")
     const { error } = await admin
@@ -59,7 +72,11 @@ export async function ensureTrainingLibrary(organisationId: string) {
     illustrated.code = "SE-05"
   }
 
-  const byCode = new Map(rows.flatMap((course) => (course.code ? [[course.code, course.id] as const] : [])))
+  const byCode = new Map(
+    rows.flatMap((course) =>
+      course.code ? [[course.code, course.id] as const] : []
+    )
+  )
 
   const missing = catalogue.filter((item) => !byCode.has(item.code))
   for (let index = 0; index < missing.length; index += 20) {
@@ -95,7 +112,9 @@ export async function ensureTrainingLibrary(organisationId: string) {
     .select("course_id")
     .eq("organisation_id", organisationId)
   if (moduleError) throw new Error(moduleError.message)
-  const withModule = new Set((modules ?? []).map((moduleRow) => moduleRow.course_id))
+  const withModule = new Set(
+    (modules ?? []).map((moduleRow) => moduleRow.course_id)
+  )
 
   const moduleRows = catalogue.flatMap((item) => {
     const courseId = byCode.get(item.code)
@@ -113,7 +132,9 @@ export async function ensureTrainingLibrary(organisationId: string) {
   })
 
   for (let index = 0; index < moduleRows.length; index += 10) {
-    const { error } = await admin.from("course_modules").insert(moduleRows.slice(index, index + 10))
+    const { error } = await admin
+      .from("course_modules")
+      .insert(moduleRows.slice(index, index + 10))
     if (error) throw new Error(error.message)
   }
 
@@ -127,15 +148,19 @@ export async function ensureTrainingLibrary(organisationId: string) {
   const requirementRows = catalogue.flatMap((item) => {
     const courseId = byCode.get(item.code)
     if (!courseId || withRoles.has(courseId)) return []
-    return rolesForCatalogue(item.code, item.audience, item.required).map((staffRole: StaffRole) => ({
-      organisation_id: organisationId,
-      course_id: courseId,
-      staff_role: staffRole,
-    }))
+    return rolesForCatalogue(item.code, item.audience, item.required).map(
+      (staffRole: StaffRole) => ({
+        organisation_id: organisationId,
+        course_id: courseId,
+        staff_role: staffRole,
+      })
+    )
   })
 
   for (let index = 0; index < requirementRows.length; index += 100) {
-    const { error } = await admin.from("course_role_requirements").insert(requirementRows.slice(index, index + 100))
+    const { error } = await admin
+      .from("course_role_requirements")
+      .insert(requirementRows.slice(index, index + 100))
     if (error) throw new Error(error.message)
   }
 

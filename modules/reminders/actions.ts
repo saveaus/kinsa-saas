@@ -44,9 +44,19 @@ export async function upsertReminderRuleAction(
     if (error) return { error: error.message }
     await recordAudit("reminder_rule.updated", "reminder_rule", ruleId, payload)
   } else {
-    const { data, error } = await supabase.from("reminder_rules").insert(payload).select("id").single()
-    if (error || !data) return { error: error?.message ?? "Could not save rule." }
-    await recordAudit("reminder_rule.created", "reminder_rule", data.id, payload)
+    const { data, error } = await supabase
+      .from("reminder_rules")
+      .insert(payload)
+      .select("id")
+      .single()
+    if (error || !data)
+      return { error: error?.message ?? "Could not save rule." }
+    await recordAudit(
+      "reminder_rule.created",
+      "reminder_rule",
+      data.id,
+      payload
+    )
   }
 
   revalidatePath("/settings/emails")

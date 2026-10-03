@@ -3,17 +3,28 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
 import { libraryLesson } from "@/modules/training/library"
-import { EXAM_ATTEMPTS, examLocked, examPassed, lessonForAttempt, scoreExam } from "@/modules/training/lesson"
+import {
+  EXAM_ATTEMPTS,
+  examLocked,
+  examPassed,
+  lessonForAttempt,
+  scoreExam,
+} from "@/modules/training/lesson"
 import { parseQuiz, scoreQuiz } from "@/modules/training/quiz"
 import { courseLapsed } from "@/modules/training/renewal"
 import { parseStaffRoles } from "@/modules/workforce/roles"
 import { notifyExamAttemptsExhausted } from "@/modules/reminders/notify"
 
-export type TrainingActionState = { error?: string; message?: string; assigned?: boolean }
+export type TrainingActionState = {
+  error?: string
+  message?: string
+  assigned?: boolean
+}
 
 export async function updateCourseSettingsAction(
   courseId: string,
@@ -33,7 +44,10 @@ export async function updateCourseSettingsAction(
   if (renewalRaw) {
     const months = Number(renewalRaw)
     if (!Number.isInteger(months) || months < 1 || months > 60) {
-      return { error: "Renewal must be a whole number of months from 1 to 60, or blank." }
+      return {
+        error:
+          "Renewal must be a whole number of months from 1 to 60, or blank.",
+      }
     }
     renewalMonths = months
   }
@@ -58,13 +72,15 @@ export async function updateCourseSettingsAction(
     .eq("organisation_id", context.organisationId)
   if (deleteError) return { error: deleteError.message }
   if (roles.length > 0) {
-    const { error: insertError } = await supabase.from("course_role_requirements").insert(
-      roles.map((staffRole) => ({
-        organisation_id: context.organisationId,
-        course_id: courseId,
-        staff_role: staffRole,
-      }))
-    )
+    const { error: insertError } = await supabase
+      .from("course_role_requirements")
+      .insert(
+        roles.map((staffRole) => ({
+          organisation_id: context.organisationId,
+          course_id: courseId,
+          staff_role: staffRole,
+        }))
+      )
     if (insertError) return { error: insertError.message }
   }
 
@@ -78,6 +94,7 @@ export async function updateCourseSettingsAction(
   revalidatePath("/courses")
   revalidatePath(`/courses/${courseId}`)
   revalidatePath("/me/courses")
+  revalidateCompliance()
   return { message: "Course settings saved." }
 }
 
@@ -98,7 +115,8 @@ export async function enrolWorkerAction(
     worker_id: workerId,
   })
   if (error) {
-    if (error.code === "23505") return { error: "This worker is already assigned this course." }
+    if (error.code === "23505")
+      return { error: "This worker is already assigned this course." }
     return { error: error.message }
   }
   await recordAudit("enrolment.created", "enrolment", courseId, { workerId })
@@ -106,6 +124,7 @@ export async function enrolWorkerAction(
   revalidatePath(`/courses/${courseId}`)
   revalidatePath(`/workers/${workerId}`)
   revalidatePath("/me/courses")
+  revalidateCompliance()
   return { message: "Assigned. They can start it from My courses." }
 }
 
@@ -115,8 +134,12 @@ export async function assignCoursesAction(
 ): Promise<TrainingActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "courses.manage")
-  const courseIds = [...new Set(formData.getAll("course_id").map(String).filter(Boolean))]
-  const workerIds = [...new Set(formData.getAll("worker_id").map(String).filter(Boolean))]
+  const courseIds = [
+    ...new Set(formData.getAll("course_id").map(String).filter(Boolean)),
+  ]
+  const workerIds = [
+    ...new Set(formData.getAll("worker_id").map(String).filter(Boolean)),
+  ]
   if (courseIds.length === 0) return { error: "Choose at least one course." }
   if (workerIds.length === 0) return { error: "Choose at least one worker." }
 
@@ -129,7 +152,9 @@ export async function assignCoursesAction(
     .in("worker_id", workerIds)
   if (existingError) return { error: existingError.message }
 
-  const taken = new Set((existing ?? []).map((row) => `${row.course_id}:${row.worker_id}`))
+  const taken = new Set(
+    (existing ?? []).map((row) => `${row.course_id}:${row.worker_id}`)
+  )
   const rows = courseIds.flatMap((courseId) =>
     workerIds
       .filter((workerId) => !taken.has(`${courseId}:${workerId}`))
@@ -139,27 +164,42 @@ export async function assignCoursesAction(
         worker_id: workerId,
       }))
   )
-  const [{ data: workerRows, error: workerError }, { data: courseRows, error: courseError }] = await Promise.all([
+  const [
+    { data: workerRows, error: workerError },
+    { data: courseRows, error: courseError },
+  ] = await Promise.all([
     supabase
       .from("workers")
       .select("first_name, last_name")
       .eq("organisation_id", context.organisationId)
       .in("id", workerIds)
       .is("deleted_at", null),
-    supabase.from("courses").select("title").eq("organisation_id", context.organisationId).in("id", courseIds),
+    supabase
+      .from("courses")
+      .select("title")
+      .eq("organisation_id", context.organisationId)
+      .in("id", courseIds),
   ])
   if (workerError) return { error: workerError.message }
   if (courseError) return { error: courseError.message }
 
-  const courseLabel = labelList((courseRows ?? []).map((course) => course.title), "courses")
+  const courseLabel = labelList(
+    (courseRows ?? []).map((course) => course.title),
+    "courses"
+  )
   const workerLabel = labelList(
-    (workerRows ?? []).map((worker) => `${worker.first_name} ${worker.last_name}`.trim()),
+    (workerRows ?? []).map((worker) =>
+      `${worker.first_name} ${worker.last_name}`.trim()
+    ),
     "workers"
   )
 
   if (rows.length === 0) {
     const verb = (courseRows ?? []).length === 1 ? "is" : "are"
-    return { assigned: true, message: `${courseLabel} ${verb} already assigned to ${workerLabel}.` }
+    return {
+      assigned: true,
+      message: `${courseLabel} ${verb} already assigned to ${workerLabel}.`,
+    }
   }
 
   const { error } = await supabase.from("enrolments").insert(rows)
@@ -174,11 +214,15 @@ export async function assignCoursesAction(
   for (const courseId of courseIds) revalidatePath(`/courses/${courseId}`)
   for (const workerId of workerIds) revalidatePath(`/workers/${workerId}`)
   revalidatePath("/me/courses")
+  revalidateCompliance()
   const skipped = courseIds.length * workerIds.length - rows.length
   const lead = `Assigned ${courseLabel} to ${workerLabel}.`
   return {
     assigned: true,
-    message: skipped > 0 ? `${lead} Some of those courses were already in place.` : lead,
+    message:
+      skipped > 0
+        ? `${lead} Some of those courses were already in place.`
+        : lead,
   }
 }
 
@@ -258,7 +302,10 @@ export async function completeModuleAction(
       .eq("enrolment_id", enrolmentId)
 
     const allPassed = (modules ?? []).every((item) =>
-      (completions ?? []).some((completion) => completion.course_module_id === item.id && completion.passed)
+      (completions ?? []).some(
+        (completion) =>
+          completion.course_module_id === item.id && completion.passed
+      )
     )
 
     await supabase
@@ -270,19 +317,30 @@ export async function completeModuleAction(
       .eq("id", enrolmentId)
 
     if (allPassed) {
-      await recordAudit("completion.recorded", "completion", moduleId, { passed, score })
+      await recordAudit("completion.recorded", "completion", moduleId, {
+        passed,
+        score,
+      })
       revalidatePath("/me/courses")
       revalidatePath(`/me/courses/${enrolmentId}`)
       revalidatePath(`/me/courses/${enrolmentId}/certificate`)
+      revalidateCompliance()
       redirect(`/me/courses/${enrolmentId}/certificate`)
     }
   } else {
-    await supabase.from("enrolments").update({ status: "in_progress" }).eq("id", enrolmentId)
+    await supabase
+      .from("enrolments")
+      .update({ status: "in_progress" })
+      .eq("id", enrolmentId)
   }
 
-  await recordAudit("completion.recorded", "completion", moduleId, { passed, score })
+  await recordAudit("completion.recorded", "completion", moduleId, {
+    passed,
+    score,
+  })
   revalidatePath("/me/courses")
   revalidatePath(`/me/courses/${enrolmentId}`)
+  revalidateCompliance()
   return passed
     ? { message: "Module completed." }
     : { error: `Score ${score}%. The pass mark was not reached. Try again.` }
@@ -316,7 +374,8 @@ export async function advanceLessonAction(
     .eq("course_id", enrolment.course_id)
     .maybeSingle()
 
-  const courseCode = (moduleRow?.courses as { code?: string | null } | null)?.code
+  const courseCode = (moduleRow?.courses as { code?: string | null } | null)
+    ?.code
   const lesson = libraryLesson(courseCode, moduleRow?.content ?? null)
   const step = lesson?.steps[stepIndex]
   if (!moduleRow || !lesson || !step || step.kind === "exam") {
@@ -339,7 +398,10 @@ export async function advanceLessonAction(
   }
 
   if (step.kind === "check" && answer !== step.correct_option_id) {
-    return { error: "Not quite. Read the feedback and try again.", feedback: step.feedback }
+    return {
+      error: "Not quite. Read the feedback and try again.",
+      feedback: step.feedback,
+    }
   }
 
   const nextIndex = Math.max(existing?.step_index ?? 0, stepIndex + 1)
@@ -373,7 +435,11 @@ export async function advanceLessonAction(
       .eq("id", enrolmentId)
     revalidatePath(`/me/courses/${enrolmentId}/certificate`)
   } else {
-    await supabase.from("enrolments").update({ status: "in_progress" }).eq("id", enrolmentId).eq("status", "assigned")
+    await supabase
+      .from("enrolments")
+      .update({ status: "in_progress" })
+      .eq("id", enrolmentId)
+      .eq("status", "assigned")
   }
   revalidatePath(`/me/courses/${enrolmentId}`)
   revalidatePath("/me/courses")
@@ -396,13 +462,26 @@ export async function reopenLapsedEnrolment(enrolmentId: string) {
     .eq("organisation_id", context.organisationId)
     .maybeSingle()
 
-  if (!enrolment || enrolment.worker_id !== context.workerId || enrolment.status !== "completed") return
+  if (
+    !enrolment ||
+    enrolment.worker_id !== context.workerId ||
+    enrolment.status !== "completed"
+  )
+    return
 
-  const months = (enrolment.courses as unknown as { renewal_months: number | null } | null)?.renewal_months ?? null
+  const months =
+    (enrolment.courses as unknown as { renewal_months: number | null } | null)
+      ?.renewal_months ?? null
   if (!courseLapsed(enrolment.completed_at, months)) return
 
-  await supabase.from("enrolments").update({ status: "in_progress", completed_at: null }).eq("id", enrolmentId)
-  await supabase.from("lesson_progress").update({ step_index: 0 }).eq("enrolment_id", enrolmentId)
+  await supabase
+    .from("enrolments")
+    .update({ status: "in_progress", completed_at: null })
+    .eq("id", enrolmentId)
+  await supabase
+    .from("lesson_progress")
+    .update({ step_index: 0 })
+    .eq("enrolment_id", enrolmentId)
   await supabase
     .from("completions")
     .update({ passed: false, score: null, answers: null, attempt_count: 0 })
@@ -411,6 +490,7 @@ export async function reopenLapsedEnrolment(enrolmentId: string) {
   revalidatePath(`/me/courses/${enrolmentId}`)
   revalidatePath("/me/courses")
   revalidatePath("/me")
+  revalidateCompliance()
 }
 
 export async function resetExamAttemptsAction(
@@ -478,10 +558,13 @@ export async function submitExamAction(
     .eq("course_id", enrolment.course_id)
     .maybeSingle()
 
-  const courseCode = (moduleRow?.courses as { code?: string | null } | null)?.code
+  const courseCode = (moduleRow?.courses as { code?: string | null } | null)
+    ?.code
   const lesson = libraryLesson(courseCode, moduleRow?.content ?? null)
-  const examIndex = lesson?.steps.findIndex((step) => step.kind === "exam") ?? -1
-  if (!moduleRow || !lesson || examIndex < 0) return { error: "Exam not found." }
+  const examIndex =
+    lesson?.steps.findIndex((step) => step.kind === "exam") ?? -1
+  if (!moduleRow || !lesson || examIndex < 0)
+    return { error: "Exam not found." }
 
   const { data: progress } = await supabase
     .from("lesson_progress")
@@ -504,15 +587,23 @@ export async function submitExamAction(
   if (existing?.passed) return { error: "You have already passed this exam." }
   const attemptCount = existing?.attempt_count ?? 0
   if (examLocked(false, attemptCount)) {
-    return { error: "You have used all 3 attempts. An administrator can reset them from the course page." }
+    return {
+      error:
+        "You have used all 3 attempts. An administrator can reset them from the course page.",
+    }
   }
 
-  const sitting = lessonForAttempt(lesson, `${enrolmentId}:${moduleId}:${attemptCount}`)
+  const sitting = lessonForAttempt(
+    lesson,
+    `${enrolmentId}:${moduleId}:${attemptCount}`
+  )
   const exam = sitting.steps[examIndex]
   if (!exam || exam.kind !== "exam") return { error: "Exam not found." }
 
   const result = scoreExam(exam, answers)
-  const passMark = (enrolment.courses as unknown as { pass_mark: number } | null)?.pass_mark ?? 80
+  const passMark =
+    (enrolment.courses as unknown as { pass_mark: number } | null)?.pass_mark ??
+    80
   const passed = examPassed(result.percent, passMark)
   const used = attemptCount + 1
   const left = EXAM_ATTEMPTS - used
@@ -531,14 +622,20 @@ export async function submitExamAction(
   )
   if (error) return { error: error.message }
 
-  const { data: modules } = await supabase.from("course_modules").select("id").eq("course_id", enrolment.course_id)
+  const { data: modules } = await supabase
+    .from("course_modules")
+    .select("id")
+    .eq("course_id", enrolment.course_id)
   const { data: completions } = await supabase
     .from("completions")
     .select("course_module_id, passed")
     .eq("enrolment_id", enrolmentId)
 
   const allPassed = (modules ?? []).every((item) =>
-    (completions ?? []).some((completion) => completion.course_module_id === item.id && completion.passed)
+    (completions ?? []).some(
+      (completion) =>
+        completion.course_module_id === item.id && completion.passed
+    )
   )
 
   await supabase
@@ -565,8 +662,11 @@ export async function submitExamAction(
   revalidatePath(`/me/courses/${enrolmentId}`)
   revalidatePath("/me/courses")
   revalidatePath(`/me/courses/${enrolmentId}/certificate`)
+  revalidateCompliance()
   if (passed && allPassed) {
-    return { message: `Passed with ${result.percent}%. Your certificate is ready.` }
+    return {
+      message: `Passed with ${result.percent}%. Your certificate is ready.`,
+    }
   }
   if (passed) return { message: `Passed with ${result.percent}%.` }
   if (left <= 0) {

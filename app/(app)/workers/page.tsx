@@ -72,7 +72,6 @@ export default async function WorkersPage() {
         { id: "percent", label: "Percent" },
       ]}
       rows={rows}
-      initialFilters={[{ columnId: "employment", operator: "is", value: "Active" }]}
       empty="No workers yet"
       emptyDescription="Add a worker to start tracking evidence."
     />

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
-import { appUrl } from "@/lib/env"
+import { revalidateCompliance } from "@/lib/revalidate-compliance"
+import { requestAppUrl } from "@/lib/request-app-url"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
@@ -12,7 +13,11 @@ import { createInviteToken, hashToken } from "@/modules/identity/token"
 import { sendInviteEmail } from "@/modules/reminders/email"
 import { parseStaffRoles } from "@/modules/workforce/roles"
 
-export type WorkerActionState = { error?: string; message?: string; inviteUrl?: string }
+export type WorkerActionState = {
+  error?: string
+  message?: string
+  inviteUrl?: string
+}
 
 export async function createWorkerAction(
   _prev: WorkerActionState,
@@ -23,7 +28,9 @@ export async function createWorkerAction(
 
   const firstName = String(formData.get("first_name") ?? "").trim()
   const lastName = String(formData.get("last_name") ?? "").trim()
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
 
   const staffRoles = parseStaffRoles(formData)
   if (!firstName || !lastName || !email) {
@@ -50,6 +57,7 @@ export async function createWorkerAction(
 
   await recordAudit("worker.created", "worker", data.id, { email })
   revalidatePath("/workers")
+  revalidateCompliance()
   redirect(`/workers/${data.id}`)
 }
 
@@ -72,8 +80,13 @@ export async function updateWorkerAction(
     .update({
       first_name: String(formData.get("first_name") ?? "").trim(),
       last_name: String(formData.get("last_name") ?? "").trim(),
-      email: String(formData.get("email") ?? "").trim().toLowerCase(),
-      employment_status: formData.get("employment_status") === "inactive" ? "inactive" : "active",
+      email: String(formData.get("email") ?? "")
+        .trim()
+        .toLowerCase(),
+      employment_status:
+        formData.get("employment_status") === "inactive"
+          ? "inactive"
+          : "active",
       staff_roles: staffRoles,
     })
     .eq("id", workerId)
@@ -82,7 +95,9 @@ export async function updateWorkerAction(
   if (error) return { error: error.message }
 
   await recordAudit("worker.updated", "worker", workerId, {})
+  revalidatePath("/workers")
   revalidatePath(`/workers/${workerId}`)
+  revalidateCompliance()
   return { message: "Worker updated." }
 }
 
@@ -107,9 +122,21 @@ export async function deleteWorkerAction(
       .remove(docs.map((doc) => doc.storage_path))
   }
 
-  await supabase.from("documents").delete().eq("worker_id", workerId).eq("organisation_id", context.organisationId)
-  await supabase.from("enrolments").delete().eq("worker_id", workerId).eq("organisation_id", context.organisationId)
-  await supabase.from("invites").delete().eq("worker_id", workerId).eq("organisation_id", context.organisationId)
+  await supabase
+    .from("documents")
+    .delete()
+    .eq("worker_id", workerId)
+    .eq("organisation_id", context.organisationId)
+  await supabase
+    .from("enrolments")
+    .delete()
+    .eq("worker_id", workerId)
+    .eq("organisation_id", context.organisationId)
+  await supabase
+    .from("invites")
+    .delete()
+    .eq("worker_id", workerId)
+    .eq("organisation_id", context.organisationId)
 
   const { error } = await supabase
     .from("workers")
@@ -130,6 +157,7 @@ export async function deleteWorkerAction(
   await recordAudit("worker.deleted", "worker", workerId, { anonymized: true })
 
   revalidatePath("/workers")
+  revalidateCompliance()
   redirect("/workers")
 }
 
@@ -140,7 +168,11 @@ export async function inviteWorkerAction(
 ): Promise<WorkerActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
-  await assertRateLimit(`invite-send:${context.organisationId}:${context.userId}`, 20, 3600)
+  await assertRateLimit(
+    `invite-send:${context.organisationId}:${context.userId}`,
+    20,
+    3600
+  )
 
   const supabase = await createServerSupabase()
   const { data: worker } = await supabase
@@ -163,17 +195,22 @@ export async function inviteWorkerAction(
   })
   if (error) return { error: error.message }
 
-  const inviteUrl = `${appUrl()}/invite/${token}`
+  const inviteUrl = `${await requestAppUrl()}/invite/${token}`
   const delivery = await sendInviteEmail({
     to: worker.email,
     workerName: `${worker.first_name} ${worker.last_name}`,
     organisationName: context.organisationName,
     inviteUrl,
   })
-  await recordAudit("worker.invited", "worker", workerId, { email: worker.email, emailed: delivery.sent })
+  await recordAudit("worker.invited", "worker", workerId, {
+    email: worker.email,
+    emailed: delivery.sent,
+  })
   revalidatePath(`/workers/${workerId}`)
   if (!delivery.sent) {
-    const needsDomain = delivery.reason.toLowerCase().includes("verify a domain")
+    const needsDomain = delivery.reason
+      .toLowerCase()
+      .includes("verify a domain")
     return {
       error: needsDomain
         ? `The invite for ${worker.email} is saved, but Resend can only email your own address until a sending domain is verified. Verify a domain in Resend, then set RESEND_FROM_EMAIL to an address on that domain. Share this link until then.`

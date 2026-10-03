@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useEffect, useRef } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ export function ActionForm({
   hideSubmit = false,
   fullWidth = false,
   submitClassName,
+  onSuccess,
 }: {
   action: (state: State, formData: FormData) => Promise<State>
   children?: React.ReactNode
@@ -30,8 +31,21 @@ export function ActionForm({
   hideSubmit?: boolean
   fullWidth?: boolean
   submitClassName?: string
+  onSuccess?: () => void
 }) {
   const [state, formAction, pending] = useActionState(action, {})
+  const submitted = useRef(false)
+
+  useEffect(() => {
+    if (pending) {
+      submitted.current = true
+      return
+    }
+    if (submitted.current && state.message && !state.error) {
+      submitted.current = false
+      onSuccess?.()
+    }
+  }, [pending, state.message, state.error, onSuccess])
 
   return (
     <form action={formAction} className={cn("grid gap-3", className)}>

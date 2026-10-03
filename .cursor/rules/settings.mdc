@@ -1,0 +1,19 @@
+---
+description: Put organisation configuration in Settings, and update Settings when a feature needs it
+alwaysApply: true
+---
+
+# Settings
+
+Organisation and notification configuration lives under `/settings`, not as its own item in the main workforce navigation.
+
+The section list is `lib/settings-sections.ts`. The settings layout renders that list. Each section is a page at `app/(app)/settings/<section>/page.tsx` and uses `SettingsFrame`.
+
+Groups are Account, Organisation, and Notifications. Account is personal and available to every signed-in person. Organisation and Notifications are administrator configuration (`audience: "admin"`).
+
+When a feature needs configuration — templates, schedules, toggles, destinations, or anything an administrator sets once for the organisation — do both of these in the same change:
+
+1. Add a section to `settingsSections` with a group, audience, label, href, and one-line description.
+2. Add the page under `app/(app)/settings/` and link any in-product control to that section.
+
+Do not add a new top-level nav item for that configuration. Do not leave a feature's settings only on the feature page.

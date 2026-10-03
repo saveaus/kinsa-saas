@@ -26,6 +26,14 @@ export type CoursePublicationStatus = "draft" | "published"
 export type EnrolmentStatus = "assigned" | "in_progress" | "completed"
 export type StaffRole = "support" | "complex_care" | "leader" | "office"
 export type ReminderCategory = "documents" | "courses"
+export type PolicyRecordStatus = "draft" | "accepted"
+export type PolicyDrafter = "person" | "assistant"
+export type ParticipantRecordKind = "service_agreement" | "support_plan"
+export type ParticipantRecordStatus = "draft" | "accepted"
+export type IncidentKind =
+  "incident" | "complaint" | "risk" | "restrictive_practice"
+export type IncidentStatus = "draft" | "accepted"
+export type SupportPlanCheckStatus = "draft" | "accepted"
 
 export type Database = {
   public: {
@@ -61,13 +69,25 @@ export type Database = {
         Relationships: []
       }
       users: {
-        Row: { id: string; email: string; full_name: string | null; created_at: string; updated_at: string }
+        Row: {
+          id: string
+          email: string
+          full_name: string | null
+          created_at: string
+          updated_at: string
+        }
         Insert: { id: string; email: string; full_name?: string | null }
         Update: { email?: string; full_name?: string | null }
         Relationships: []
       }
       memberships: {
-        Row: { id: string; user_id: string; organisation_id: string; role: AppRole; created_at: string }
+        Row: {
+          id: string
+          user_id: string
+          organisation_id: string
+          role: AppRole
+          created_at: string
+        }
         Insert: { user_id: string; organisation_id: string; role: AppRole }
         Update: { role?: AppRole }
         Relationships: []
@@ -123,13 +143,26 @@ export type Database = {
           effective_to: string | null
           created_at: string
         }
-        Insert: { code: string; name: string; description?: string | null; requires_expiry?: boolean }
+        Insert: {
+          code: string
+          name: string
+          description?: string | null
+          requires_expiry?: boolean
+        }
         Update: { name?: string; effective_to?: string | null }
         Relationships: []
       }
       organisation_document_types: {
-        Row: { organisation_id: string; document_type_version_id: string; required: boolean }
-        Insert: { organisation_id: string; document_type_version_id: string; required?: boolean }
+        Row: {
+          organisation_id: string
+          document_type_version_id: string
+          required: boolean
+        }
+        Insert: {
+          organisation_id: string
+          document_type_version_id: string
+          required?: boolean
+        }
         Update: { required?: boolean }
         Relationships: []
       }
@@ -169,6 +202,294 @@ export type Database = {
           review_note?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
+        }
+        Relationships: []
+      }
+      policies: {
+        Row: {
+          id: string
+          organisation_id: string
+          name: string
+          standard_code: string
+          review_on: string
+          status: PolicyRecordStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by: PolicyDrafter
+          created_by: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          name: string
+          standard_code: string
+          review_on: string
+          status?: PolicyRecordStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by?: PolicyDrafter
+          created_by?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          status?: PolicyRecordStatus
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      participants: {
+        Row: {
+          id: string
+          organisation_id: string
+          name: string
+          ndis_number: string
+          active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          name: string
+          ndis_number: string
+          active?: boolean
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          ndis_number?: string
+          active?: boolean
+        }
+        Relationships: []
+      }
+      participant_records: {
+        Row: {
+          id: string
+          organisation_id: string
+          participant_id: string
+          kind: ParticipantRecordKind
+          starts_on: string | null
+          ends_on: string | null
+          review_on: string | null
+          status: ParticipantRecordStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by: PolicyDrafter
+          created_by: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          participant_id: string
+          kind: ParticipantRecordKind
+          starts_on?: string | null
+          ends_on?: string | null
+          review_on?: string | null
+          status?: ParticipantRecordStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by?: PolicyDrafter
+          created_by?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          status?: ParticipantRecordStatus
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      incidents: {
+        Row: {
+          id: string
+          organisation_id: string
+          kind: IncidentKind
+          summary: string
+          occurred_on: string
+          participant_id: string | null
+          status: IncidentStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by: PolicyDrafter
+          created_by: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          kind: IncidentKind
+          summary: string
+          occurred_on: string
+          participant_id?: string | null
+          status?: IncidentStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by?: PolicyDrafter
+          created_by?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          status?: IncidentStatus
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      support_plan_checks: {
+        Row: {
+          id: string
+          organisation_id: string
+          participant_id: string
+          plan_id: string
+          note: string
+          checked_on: string
+          followed: boolean
+          status: SupportPlanCheckStatus
+          storage_path: string | null
+          original_filename: string | null
+          mime_type: string | null
+          file_size_bytes: number | null
+          drafted_by: PolicyDrafter
+          created_by: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          participant_id: string
+          plan_id: string
+          note: string
+          checked_on: string
+          followed: boolean
+          status?: SupportPlanCheckStatus
+          storage_path?: string | null
+          original_filename?: string | null
+          mime_type?: string | null
+          file_size_bytes?: number | null
+          drafted_by?: PolicyDrafter
+          created_by?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          status?: SupportPlanCheckStatus
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      log_registers: {
+        Row: {
+          id: string
+          organisation_id: string
+          name: string
+          slug: string
+          visible: boolean
+          scope: string
+          subject: string
+          participant_id: string | null
+          worker_id: string | null
+          built_in: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          name: string
+          slug: string
+          visible?: boolean
+          scope: string
+          subject: string
+          participant_id?: string | null
+          worker_id?: string | null
+          built_in?: string | null
+        }
+        Update: {
+          name?: string
+          slug?: string
+          visible?: boolean
+          scope?: string
+          subject?: string
+          participant_id?: string | null
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
+      log_entries: {
+        Row: {
+          id: string
+          organisation_id: string
+          register_id: string
+          summary: string
+          occurred_on: string
+          participant_id: string | null
+          worker_id: string | null
+          status: IncidentStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by: PolicyDrafter
+          created_by: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          register_id: string
+          summary: string
+          occurred_on: string
+          participant_id?: string | null
+          worker_id?: string | null
+          status?: IncidentStatus
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+          drafted_by?: PolicyDrafter
+          created_by?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          status?: IncidentStatus
+          accepted_by?: string | null
+          accepted_at?: string | null
         }
         Relationships: []
       }
@@ -266,7 +587,11 @@ export type Database = {
           assigned_at: string
           completed_at: string | null
         }
-        Insert: { organisation_id: string; course_id: string; worker_id: string }
+        Insert: {
+          organisation_id: string
+          course_id: string
+          worker_id: string
+        }
         Update: { status?: EnrolmentStatus; completed_at?: string | null }
         Relationships: []
       }
@@ -291,7 +616,12 @@ export type Database = {
           answers?: Json | null
           attempt_count?: number
         }
-        Update: { passed?: boolean; score?: number | null; answers?: Json | null; attempt_count?: number }
+        Update: {
+          passed?: boolean
+          score?: number | null
+          answers?: Json | null
+          attempt_count?: number
+        }
         Relationships: []
       }
       lesson_progress: {
@@ -313,14 +643,30 @@ export type Database = {
         Relationships: []
       }
       course_role_requirements: {
-        Row: { organisation_id: string; course_id: string; staff_role: StaffRole }
-        Insert: { organisation_id: string; course_id: string; staff_role: StaffRole }
+        Row: {
+          organisation_id: string
+          course_id: string
+          staff_role: StaffRole
+        }
+        Insert: {
+          organisation_id: string
+          course_id: string
+          staff_role: StaffRole
+        }
         Update: { staff_role?: StaffRole }
         Relationships: []
       }
       document_role_requirements: {
-        Row: { organisation_id: string; document_type_version_id: string; staff_role: StaffRole }
-        Insert: { organisation_id: string; document_type_version_id: string; staff_role: StaffRole }
+        Row: {
+          organisation_id: string
+          document_type_version_id: string
+          staff_role: StaffRole
+        }
+        Insert: {
+          organisation_id: string
+          document_type_version_id: string
+          staff_role: StaffRole
+        }
         Update: { staff_role?: StaffRole }
         Relationships: []
       }
@@ -406,7 +752,12 @@ export type Database = {
           action: string
           created_at: string
         }
-        Insert: { organisation_id: string; document_id: string; actor_user_id?: string | null; action?: string }
+        Insert: {
+          organisation_id: string
+          document_id: string
+          actor_user_id?: string | null
+          action?: string
+        }
         Update: Record<string, never>
         Relationships: []
       }
@@ -437,17 +788,31 @@ export type Database = {
     Views: Record<string, never>
     Functions: {
       accept_invite: { Args: { p_token_hash: string }; Returns: string }
-      check_rate_limit: { Args: { p_key: string; p_max: number; p_window_seconds: number }; Returns: boolean }
+      check_rate_limit: {
+        Args: { p_key: string; p_max: number; p_window_seconds: number }
+        Returns: boolean
+      }
       create_organisation: {
         Args: { org_name: string; p_registration_groups?: string[] }
         Returns: string
       }
-      peek_invite: { Args: { p_token_hash: string }; Returns: { email: string; expires_at: string }[] }
+      peek_invite: {
+        Args: { p_token_hash: string }
+        Returns: { email: string; expires_at: string }[]
+      }
       record_audit: {
-        Args: { p_action: string; p_target_type: string; p_target_id: string; p_metadata?: Json }
+        Args: {
+          p_action: string
+          p_target_type: string
+          p_target_id: string
+          p_metadata?: Json
+        }
         Returns: undefined
       }
-      anonymize_worker_audit: { Args: { p_worker_id: string }; Returns: undefined }
+      anonymize_worker_audit: {
+        Args: { p_worker_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_permission: AppPermission
@@ -456,6 +821,12 @@ export type Database = {
       document_approval_status: DocumentApprovalStatus
       enrolment_status: EnrolmentStatus
       reminder_category: ReminderCategory
+      policy_record_status: PolicyRecordStatus
+      participant_record_kind: ParticipantRecordKind
+      participant_record_status: ParticipantRecordStatus
+      incident_kind: IncidentKind
+      incident_status: IncidentStatus
+      support_plan_check_status: SupportPlanCheckStatus
       staff_role: StaffRole
       worker_employment_status: WorkerEmploymentStatus
     }

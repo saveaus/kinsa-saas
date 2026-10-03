@@ -3,15 +3,19 @@
 import {
   Activity,
   BadgeCheck,
+  ClipboardList,
   BookOpen,
   ChevronDown,
+  ChevronRight,
   FileDown,
+  FileText,
   GraduationCap,
   KeyRound,
   LayoutDashboard,
   Settings,
   Shield,
   SunMoon,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -20,6 +24,11 @@ import { useTheme } from "next-themes"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,29 +45,56 @@ import { OrgMark } from "@/components/org-mark"
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarTrigger,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
+import { cn } from "cn"
 import { signOutAction } from "@/modules/identity/actions"
 
 type NavItem = { href: string; label: string; icon: LucideIcon }
 
-const adminPrimary: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/workers", label: "Workers", icon: Users },
-  { href: "/approvals", label: "Approvals", icon: BadgeCheck },
-  { href: "/courses", label: "Courses", icon: BookOpen },
-  { href: "/me/courses", label: "My courses", icon: GraduationCap },
-]
-
-const adminReports: NavItem[] = [
-  { href: "/reports", label: "Evidence", icon: FileDown },
-  { href: "/activity", label: "Activity", icon: Activity },
-]
+function adminGroups(): { label?: string; items: NavItem[] }[] {
+  return [
+    {
+      items: [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { href: "/workers", label: "Workers", icon: Users },
+        { href: "/participants", label: "Participants", icon: UserRound },
+        { href: "/approvals", label: "Approvals", icon: BadgeCheck },
+      ],
+    },
+    {
+      label: "Governance",
+      items: [
+        { href: "/policies", label: "Policies", icon: FileText },
+        { href: "/logs", label: "Logs", icon: ClipboardList },
+      ],
+    },
+    {
+      label: "Training",
+      items: [
+        { href: "/courses", label: "Courses", icon: BookOpen },
+        { href: "/me/courses", label: "My courses", icon: GraduationCap },
+      ],
+    },
+    {
+      label: "Reports",
+      items: [
+        { href: "/reports", label: "Evidence", icon: FileDown },
+        { href: "/activity", label: "Activity", icon: Activity },
+      ],
+    },
+  ]
+}
 
 const workerItems: NavItem[] = [
   { href: "/me", label: "Compliance", icon: Shield },
@@ -71,12 +107,93 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
+const navGroupStorageKey = "kinsa-nav-groups"
+
+function readGroupOpen(label: string) {
+  try {
+    const raw = localStorage.getItem(navGroupStorageKey)
+    if (!raw) return true
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== "object") return true
+    const stored = (parsed as Record<string, unknown>)[label]
+    return typeof stored === "boolean" ? stored : true
+  } catch {
+    return true
+  }
+}
+
+function writeGroupOpen(label: string, open: boolean) {
+  try {
+    const raw = localStorage.getItem(navGroupStorageKey)
+    const parsed: unknown = raw ? JSON.parse(raw) : {}
+    const stored =
+      parsed && typeof parsed === "object"
+        ? { ...(parsed as Record<string, boolean>) }
+        : {}
+    stored[label] = open
+    localStorage.setItem(navGroupStorageKey, JSON.stringify(stored))
+  } catch {
+    return
+  }
+}
+
+function NavGroup({
+  label,
+  items,
+  pathname,
+}: {
+  label: string
+  items: NavItem[]
+  pathname: string
+}) {
+  const { state } = useSidebar()
+  const containsActive = items.some((item) => isActive(pathname, item.href))
+  const [open, setOpen] = useState(true)
+  const shown = open || state === "collapsed"
+
+  useEffect(() => {
+    setOpen(containsActive || readGroupOpen(label))
+  }, [label, containsActive])
+
+  function onOpenChange(next: boolean) {
+    setOpen(next)
+    writeGroupOpen(label, next)
+  }
+
+  return (
+    <Collapsible open={shown} onOpenChange={onOpenChange}>
+      <SidebarGroup className="py-1">
+        <CollapsibleTrigger className="group/label flex h-6 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[11px] font-normal text-muted-foreground outline-none group-data-[collapsible=icon]:hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <ChevronRight
+              className={cn(
+                "size-3 transition-transform duration-150",
+                open && "rotate-90",
+                open ? "opacity-0 group-hover/label:opacity-100" : "opacity-100"
+              )}
+            />
+          </span>
+          <span>{label}</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0">
+          <SidebarGroupContent>
+            <NavMenu items={items} pathname={pathname} />
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  )
+}
+
 function NavMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.href}>
-          <SidebarMenuButton isActive={isActive(pathname, item.href)} render={<Link href={item.href} />}>
+          <SidebarMenuButton
+            isActive={isActive(pathname, item.href)}
+            render={<Link href={item.href} />}
+          >
             <item.icon />
             <span>{item.label}</span>
           </SidebarMenuButton>
@@ -109,6 +226,16 @@ function themeLabel(theme: ThemeChoice) {
   }
 }
 
+export function CollapsedSidebarTrigger() {
+  const { isMobile, state } = useSidebar()
+  if (isMobile || state !== "collapsed") return null
+  return (
+    <div className="flex h-12 shrink-0 items-center px-2">
+      <SidebarTrigger />
+    </div>
+  )
+}
+
 export function WorkspaceHeader({
   name,
   logoUrl,
@@ -139,7 +266,7 @@ export function WorkspaceHeader({
               Settings
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem onClick={() => router.push("/account")}>
+          <DropdownMenuItem onClick={() => router.push("/settings/password")}>
             <KeyRound />
             Password
           </DropdownMenuItem>
@@ -147,12 +274,20 @@ export function WorkspaceHeader({
             <DropdownMenuSubTrigger>
               <SunMoon />
               Theme
-              {mounted ? <span className="ml-auto text-xs text-muted-foreground">{themeLabel(selected)}</span> : null}
+              {mounted ? (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {themeLabel(selected)}
+                </span>
+              ) : null}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuRadioGroup
                 value={selected}
-                onValueChange={(value) => setTheme(asTheme(typeof value === "string" ? value : undefined))}
+                onValueChange={(value) =>
+                  setTheme(
+                    asTheme(typeof value === "string" ? value : undefined)
+                  )
+                }
               >
                 {themeChoices.map((choice) => (
                   <DropdownMenuRadioItem key={choice} value={choice}>
@@ -163,7 +298,9 @@ export function WorkspaceHeader({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => signOutAction()}>Sign out</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => signOutAction()}>
+            Sign out
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <SidebarTrigger className="ml-auto text-muted-foreground" />
@@ -186,17 +323,22 @@ export function AppNav({ admin }: { admin: boolean }) {
 
   return (
     <>
-      <SidebarGroup className="py-1">
-        <SidebarGroupContent>
-          <NavMenu items={adminPrimary} pathname={pathname} />
-        </SidebarGroupContent>
-      </SidebarGroup>
-      <SidebarGroup className="py-1">
-        <SidebarGroupLabel className="h-6 text-[11px] font-normal text-muted-foreground">Reports</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <NavMenu items={adminReports} pathname={pathname} />
-        </SidebarGroupContent>
-      </SidebarGroup>
+      {adminGroups().map((group) =>
+        group.label ? (
+          <NavGroup
+            key={group.label}
+            label={group.label}
+            items={group.items}
+            pathname={pathname}
+          />
+        ) : (
+          <SidebarGroup key="home" className="py-1">
+            <SidebarGroupContent>
+              <NavMenu items={group.items} pathname={pathname} />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )
+      )}
     </>
   )
 }
@@ -205,7 +347,9 @@ export function AppFooterNav({ admin }: { admin: boolean }) {
   const pathname = usePathname()
   if (!admin) return null
 
-  const items: NavItem[] = [{ href: "/settings/general", label: "Settings", icon: Settings }]
+  const items: NavItem[] = [
+    { href: "/settings/general", label: "Settings", icon: Settings },
+  ]
 
   return (
     <SidebarGroup className="p-0">
@@ -214,7 +358,11 @@ export function AppFooterNav({ admin }: { admin: boolean }) {
           {items.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
-                isActive={item.href.startsWith("/settings") ? pathname.startsWith("/settings") : isActive(pathname, item.href)}
+                isActive={
+                  item.href.startsWith("/settings")
+                    ? pathname.startsWith("/settings")
+                    : isActive(pathname, item.href)
+                }
                 render={<Link href={item.href} />}
               >
                 <item.icon />

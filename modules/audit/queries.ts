@@ -12,6 +12,7 @@ export type AuditFilters = {
 }
 
 type AuditEvent = Database["public"]["Tables"]["audit_events"]["Row"]
+export type NamedAuditEvent = AuditEvent & { actorName: string }
 type SupabaseClient = Awaited<ReturnType<typeof createServerSupabase>>
 
 const ACTOR_ROLES = new Set<AppRole>(["admin", "worker"])
@@ -61,6 +62,30 @@ function auditEventsQuery(supabase: SupabaseClient, context: TenantContext, filt
   return request
 }
 
+function actorFallback(event: AuditEvent) {
+  return event.actor_role ?? "system"
+}
+
+async function withActorNames(supabase: SupabaseClient, events: AuditEvent[]): Promise<NamedAuditEvent[]> {
+  const ids = [...new Set(events.flatMap((event) => (event.actor_user_id ? [event.actor_user_id] : [])))]
+  const names = new Map<string, string>()
+
+  for (let index = 0; index < ids.length; index += 200) {
+    const slice = ids.slice(index, index + 200)
+    const { data, error } = await supabase.from("users").select("id, full_name, email").in("id", slice)
+    if (error) throw new Error(error.message)
+    for (const user of data ?? []) {
+      const name = user.full_name?.trim() || user.email
+      if (name) names.set(user.id, name)
+    }
+  }
+
+  return events.map((event) => ({
+    ...event,
+    actorName: (event.actor_user_id && names.get(event.actor_user_id)) || actorFallback(event),
+  }))
+}
+
 export async function listAuditEvents(context: TenantContext, filters: AuditFilters = {}, page = 1) {
   const supabase = await createServerSupabase()
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1
@@ -69,8 +94,9 @@ export async function listAuditEvents(context: TenantContext, filters: AuditFilt
   if (error) {
     throw new Error(error.message)
   }
-  const rows = data ?? []
-  return { events: rows.slice(0, AUDIT_PAGE_SIZE) as AuditEvent[], hasMore: rows.length > AUDIT_PAGE_SIZE }
+  const rows = (data ?? []) as AuditEvent[]
+  const pageRows = rows.slice(0, AUDIT_PAGE_SIZE)
+  return { events: await withActorNames(supabase, pageRows), hasMore: rows.length > AUDIT_PAGE_SIZE }
 }
 
 export async function listAllAuditEvents(context: TenantContext, filters: AuditFilters = {}) {
@@ -87,10 +113,10 @@ export async function listAllAuditEvents(context: TenantContext, filters: AuditF
     const rows = (data ?? []) as AuditEvent[]
     events.push(...rows)
     if (rows.length < ALL_PAGE_SIZE) {
-      return { events, truncated: false }
+      return { events: await withActorNames(supabase, events), truncated: false }
     }
     if (events.length >= ALL_MAX_ROWS) {
-      return { events: events.slice(0, ALL_MAX_ROWS), truncated: true }
+      return { events: await withActorNames(supabase, events.slice(0, ALL_MAX_ROWS)), truncated: true }
     }
     offset += ALL_PAGE_SIZE
   }
@@ -158,6 +184,7 @@ export async function listWorkerActivity(
     .range(from, from + pageSize)
 
   if (error) throw new Error(error.message)
-  const rows = data ?? []
-  return { events: rows.slice(0, pageSize), hasMore: rows.length > pageSize }
+  const rows = (data ?? []) as AuditEvent[]
+  const pageRows = rows.slice(0, pageSize)
+  return { events: await withActorNames(supabase, pageRows), hasMore: rows.length > pageSize }
 }

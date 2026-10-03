@@ -42,16 +42,16 @@ export default async function ActivityPage({
   const truncated = showAll && "truncated" in listResult ? listResult.truncated : false
 
   const rows: RecordRow[] = events.map((event) => {
-    const actor = event.actor_role ?? "system"
+    const role = event.actor_role ?? "system"
     return {
       id: event.id,
       cells: {
         when: { kind: "text", text: formatDateTime(event.created_at) },
-        event: { kind: "text", text: `${actor} ${auditSentence(event.action, event.target_type)}` },
+        event: { kind: "text", text: `${event.actorName} ${auditSentence(event.action, event.target_type)}` },
         actor: {
           kind: "chip",
-          text: actor,
-          tone: actor === "admin" ? "blue" : actor === "worker" ? "mint" : "gray",
+          text: event.actorName,
+          tone: role === "admin" ? "blue" : role === "worker" ? "mint" : "gray",
         },
       },
     }

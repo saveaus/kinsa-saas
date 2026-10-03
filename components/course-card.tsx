@@ -19,7 +19,8 @@ export function CourseCard({
   title,
   description,
   imageSrc,
-  chips,
+  chips = [],
+  label,
   progress,
   compact = false,
 }: {
@@ -27,7 +28,8 @@ export function CourseCard({
   title: string
   description?: string | null
   imageSrc?: string | null
-  chips: Array<{ label: string; tone: ChipTone }>
+  chips?: Array<{ label: string; tone: ChipTone }>
+  label?: string
   progress?: number
   compact?: boolean
 }) {
@@ -39,26 +41,31 @@ export function CourseCard({
         className={compact ? "h-20 w-full object-cover" : "aspect-[16/9] w-full object-cover"}
       />
       <CardHeader>
+        {label ? <p className="text-xs text-muted-foreground">{label}</p> : null}
         <CardTitle className={compact ? "line-clamp-2" : undefined}>{title}</CardTitle>
         {description ? (
           <CardDescription className={compact ? "line-clamp-2 text-xs" : "line-clamp-3"}>{description}</CardDescription>
         ) : null}
       </CardHeader>
-      <CardContent className={compact ? "grid gap-2" : "grid gap-3"}>
-        {progress != null ? (
-          <Progress value={progress}>
-            <ProgressLabel>Progress</ProgressLabel>
-            <ProgressValue>{() => `${progress}%`}</ProgressValue>
-          </Progress>
-        ) : null}
-        <div className={compact ? "flex flex-wrap gap-1" : "flex flex-wrap gap-2"}>
-          {chips.map((chip) => (
-            <Chip key={chip.label} tone={chip.tone}>
-              {chip.label}
-            </Chip>
-          ))}
-        </div>
-      </CardContent>
+      {progress != null || chips.length > 0 ? (
+        <CardContent className={compact ? "grid gap-2" : "grid gap-3"}>
+          {progress != null ? (
+            <Progress value={progress}>
+              <ProgressLabel>Progress</ProgressLabel>
+              <ProgressValue>{() => `${progress}%`}</ProgressValue>
+            </Progress>
+          ) : null}
+          {chips.length > 0 ? (
+            <div className={compact ? "flex flex-wrap gap-1" : "flex flex-wrap gap-2"}>
+              {chips.map((chip) => (
+                <Chip key={chip.label} tone={chip.tone}>
+                  {chip.label}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
+        </CardContent>
+      ) : null}
     </Card>
   )
 

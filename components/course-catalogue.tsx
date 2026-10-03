@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { assignCoursesAction } from "@/modules/training/actions"
-import { courseFamily, courseKindLabel, renewalLabel } from "@/modules/training/display"
+import { courseFamily, courseFamilyOrder, courseKindLabel, renewalLabel } from "@/modules/training/display"
 
 export type CatalogueWorker = {
   id: string
@@ -37,6 +37,7 @@ export type CatalogueCourse = {
   renewal_months: number | null
   kind: string
   audience: string | null
+  parentCode: string | null
 }
 
 export function CourseCatalogue({
@@ -51,9 +52,13 @@ export function CourseCatalogue({
   const [formKey, setFormKey] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const selectedCourses = courses.filter((course) => selected.includes(course.id))
+  const titleByCode = new Map(courses.flatMap((course) => (course.code ? [[course.code, course.title] as const] : [])))
 
   const rows: RecordRow[] = courses.map((course) => ({
     id: course.id,
+    searchText: [course.description, course.parentCode ? titleByCode.get(course.parentCode) : null]
+      .filter(Boolean)
+      .join(" "),
     cells: {
       course: { kind: "link", text: course.title, href: `/courses/${course.id}` },
       code: { kind: "text", text: course.code ?? "—" },
@@ -116,48 +121,27 @@ export function CourseCatalogue({
         ]}
         rows={rows}
         empty="No courses match those filters."
-        renderCard={(row) => {
+        renderCard={(row, selecting) => {
           const course = courses.find((item) => item.id === row.id)
           if (!course) return null
           return (
-            <div className="relative h-full">
-              <label className="absolute top-2 left-2 z-10 flex size-6 items-center justify-center rounded-md bg-background/90 shadow-sm">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={selected.includes(course.id)}
-                  aria-label={`Select ${course.title}`}
-                  onChange={() =>
-                    setSelected((current) =>
-                      current.includes(course.id)
-                        ? current.filter((id) => id !== course.id)
-                        : [...current, course.id]
-                    )
-                  }
-                />
-              </label>
-              <CourseCard
-                compact
-                href={`/courses/${course.id}`}
-                title={course.title}
-                description={course.description}
-                imageSrc={course.cover_image}
-                chips={[
-                  ...(course.code ? [{ label: course.code, tone: "gray" as const }] : []),
-                  { label: course.status, tone: course.status === "published" ? "green" as const : "gray" as const },
-                  {
-                    label: course.required ? "Required" : "Optional",
-                    tone: course.required ? "blue" as const : "gray" as const,
-                  },
-                  { label: `${course.pass_mark}% to pass`, tone: "mint" as const },
-                  ...(renewalLabel(course.renewal_months)
-                    ? [{ label: renewalLabel(course.renewal_months) as string, tone: "orange" as const }]
-                    : []),
-                ]}
-              />
-            </div>
+            <ModuleCard
+              course={course}
+              selecting={selecting}
+              selected={selected.includes(course.id)}
+              onToggle={() => toggleCourse(course.id, setSelected)}
+            />
           )
         }}
+        renderCardGrid={(visibleRows, selecting) => (
+          <ModuleCardGrid
+            courses={courses}
+            visibleIds={visibleRows.map((row) => row.id)}
+            selecting={selecting}
+            selected={selected}
+            onToggle={(courseId) => toggleCourse(courseId, setSelected)}
+          />
+        )}
       />
       <AssignDialog
         key={formKey}
@@ -171,6 +155,102 @@ export function CourseCatalogue({
         }}
       />
     </>
+  )
+}
+
+function toggleCourse(courseId: string, setSelected: (update: (current: string[]) => string[]) => void) {
+  setSelected((current) =>
+    current.includes(courseId) ? current.filter((id) => id !== courseId) : [...current, courseId]
+  )
+}
+
+function SelectBox({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean
+  label: string
+  onToggle: () => void
+}) {
+  return (
+    <label className="absolute top-2 left-2 z-10 flex size-6 items-center justify-center rounded-md bg-background/90 shadow-sm">
+      <input type="checkbox" className="size-4" checked={checked} aria-label={label} onChange={onToggle} />
+    </label>
+  )
+}
+
+function ModuleCard({
+  course,
+  selecting,
+  selected,
+  onToggle,
+}: {
+  course: CatalogueCourse
+  selecting: boolean
+  selected: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="relative h-full">
+      {selecting ? <SelectBox checked={selected} label={`Select ${course.title}`} onToggle={onToggle} /> : null}
+      <CourseCard
+        compact
+        href={`/courses/${course.id}`}
+        title={course.title}
+        description={course.description}
+        imageSrc={course.cover_image}
+        label={courseKindLabel(course.kind)}
+      />
+    </div>
+  )
+}
+
+function ModuleCardGrid({
+  courses,
+  visibleIds,
+  selecting,
+  selected,
+  onToggle,
+}: {
+  courses: CatalogueCourse[]
+  visibleIds: string[]
+  selecting: boolean
+  selected: string[]
+  onToggle: (courseId: string) => void
+}) {
+  const visible = new Set(visibleIds)
+  const shown = courses.filter((course) => visible.has(course.id))
+
+  const families = courseFamilyOrder.flatMap((family) => {
+    const inFamily = shown.filter((course) => courseFamily(course.code) === family)
+    if (inFamily.length === 0) return []
+    return [{ family, courses: inFamily }]
+  })
+
+  if (families.length === 0) {
+    return <p className="py-10 text-center text-sm text-muted-foreground">No records match.</p>
+  }
+
+  return (
+    <div className="grid gap-8">
+      {families.map((group) => (
+        <section key={group.family} className="grid gap-3">
+          <h3 className="text-sm font-medium">{group.family}</h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+            {group.courses.map((course) => (
+              <ModuleCard
+                key={course.id}
+                course={course}
+                selecting={selecting}
+                selected={selected.includes(course.id)}
+                onToggle={() => onToggle(course.id)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   )
 }
 

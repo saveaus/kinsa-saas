@@ -25,6 +25,48 @@ const verbs: Record<string, string> = {
   "organisation.logo_removed": "removed the organisation logo",
   "organisation.identity_updated": "updated business details",
   "admin.invited": "invited an administrator",
+  "policy.drafted": "saved a policy draft",
+  "policy.accepted": "accepted a policy",
+  "policy.draft_removed": "removed a policy draft",
+  "policy.viewed": "viewed a policy",
+  "participant.added": "added a participant",
+  "participant.updated": "updated a participant",
+  "participant.removed": "removed a participant",
+  "service_agreement.drafted": "saved a service agreement draft",
+  "service_agreement.accepted": "accepted a service agreement",
+  "service_agreement.draft_removed": "removed a service agreement draft",
+  "service_agreement.viewed": "viewed a service agreement",
+  "support_plan.drafted": "saved a support plan draft",
+  "support_plan.accepted": "accepted a support plan",
+  "support_plan.draft_removed": "removed a support plan draft",
+  "support_plan.viewed": "viewed a support plan",
+  "incident.drafted": "saved an incident draft",
+  "incident.accepted": "accepted an incident",
+  "incident.draft_removed": "removed an incident draft",
+  "incident.viewed": "viewed an incident",
+  "complaint.drafted": "saved a complaint draft",
+  "complaint.accepted": "accepted a complaint",
+  "complaint.draft_removed": "removed a complaint draft",
+  "complaint.viewed": "viewed a complaint",
+  "risk.drafted": "saved a risk draft",
+  "risk.accepted": "accepted a risk",
+  "risk.draft_removed": "removed a risk draft",
+  "risk.viewed": "viewed a risk",
+  "restrictive_practice.drafted": "saved a restrictive practice draft",
+  "restrictive_practice.accepted": "accepted a restrictive practice",
+  "restrictive_practice.draft_removed": "removed a restrictive practice draft",
+  "restrictive_practice.viewed": "viewed a restrictive practice",
+  "support_plan_check.drafted": "saved a support plan check draft",
+  "support_plan_check.accepted": "accepted a support plan check",
+  "support_plan_check.draft_removed": "removed a support plan check draft",
+  "support_plan_check.viewed": "viewed a support plan check",
+  "log.created": "added a log",
+  "log.removed": "removed a log",
+  "log.visibility_updated": "updated which logs are shown",
+  "log.drafted": "saved a log draft",
+  "log.accepted": "accepted a log entry",
+  "log.draft_removed": "removed a log draft",
+  "log.viewed": "viewed a log entry",
 }
 
 const workerVerbs: Record<string, string> = {
@@ -36,7 +78,14 @@ const workerVerbs: Record<string, string> = {
   "report.exported": "exported this record",
 }
 
-export function auditSentence(action: string, targetType: string, scope: "org" | "worker" = "org") {
+export function auditSentence(
+  action: string,
+  targetType: string,
+  scope: "org" | "worker" = "org"
+) {
   const map = scope === "worker" ? workerVerbs : verbs
-  return map[action] ?? `${action.replaceAll(/[._]/g, " ")} on ${targetType.replaceAll("_", " ")}`
+  return (
+    map[action] ??
+    `${action.replaceAll(/[._]/g, " ")} on ${targetType.replaceAll("_", " ")}`
+  )
 }

@@ -66,6 +66,7 @@ export default async function TakeCoursePage({
         priorScore={completion?.score ?? null}
         passed={completion?.passed ?? false}
         attemptsUsed={attemptsUsed}
+        courseCode={course.code}
       />
     )
   }
@@ -96,6 +97,7 @@ export default async function TakeCoursePage({
               priorScore={completion?.score ?? null}
               passed={completion?.passed ?? false}
               attemptsUsed={attemptsUsed}
+              courseCode={course.code}
             />
           )
         }

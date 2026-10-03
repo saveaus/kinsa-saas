@@ -60,3 +60,48 @@ export function renewalLabel(months: number | null) {
   if (months != null) return `Renews every ${months} months`
   return null
 }
+
+const COMPLEX_CARE_SKILLS: Record<number, string> = {
+  1: "Complex bowel care",
+  2: "Enteral feeding",
+  3: "Severe dysphagia",
+  4: "Ventilation support",
+  5: "Tracheostomy",
+  6: "Urinary catheter",
+  7: "Subcutaneous injections",
+  8: "Complex wound",
+  9: "Diabetes management",
+}
+
+const MEDICATION_CODES = new Set(["SE-11", "CP-05", "B-15", "B-24", "B-25"])
+
+export function practicalSignOff(code: string | null) {
+  if (!code) return null
+  const [prefix, rawNumber] = code.split("-")
+  const number = Number(rawNumber)
+  if (prefix === "CC") {
+    const name = COMPLEX_CARE_SKILLS[number]
+    if (!name) return null
+    return {
+      name,
+      note: `This is theory. ${name} is signed off separately by a qualified health practitioner.`,
+    }
+  }
+  if (MEDICATION_CODES.has(code)) {
+    return {
+      name: "Medication",
+      note: "This is theory. It does not replace the medication observation.",
+    }
+  }
+  const manualHandling =
+    (prefix === "SE" && number >= 6 && number <= 10) ||
+    code === "CP-04" ||
+    (prefix === "B" && number >= 17 && number <= 23)
+  if (manualHandling) {
+    return {
+      name: "Manual handling",
+      note: "This is theory. It does not replace practical observation of the transfer.",
+    }
+  }
+  return null
+}

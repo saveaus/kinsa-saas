@@ -100,6 +100,7 @@ export function WorkerRecord({
   uploadAction,
   csvHref,
   pdfHref,
+  logs,
 }: {
   name: string
   email: string
@@ -119,6 +120,7 @@ export function WorkerRecord({
   uploadAction: (state: DocumentActionState, formData: FormData) => Promise<DocumentActionState>
   csvHref: string
   pdfHref: string
+  logs?: ReactNode
 }) {
   const [tab, setTab] = useState("activity")
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -193,7 +195,17 @@ export function WorkerRecord({
             <TabsTrigger value="compliance" className="flex-none px-2.5 text-[13px] font-normal">
               Compliance
             </TabsTrigger>
+            {logs ? (
+              <TabsTrigger value="logs" className="flex-none px-2.5 text-[13px] font-normal">
+                Logs
+              </TabsTrigger>
+            ) : null}
           </TabsList>
+          {logs ? (
+            <TabsContent value="logs" className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
+              <div className="grid gap-4">{logs}</div>
+            </TabsContent>
+          ) : null}
           <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
             {groups.length === 0 ? (
               <EmptyState
@@ -526,7 +538,7 @@ function DetailsForm({
   canManage: boolean
   updateAction: (state: WorkerActionState, formData: FormData) => Promise<WorkerActionState>
 }) {
-  const [editing, setEditing] = useState<"firstName" | "lastName" | "email" | "employment" | null>(null)
+  const [editing, setEditing] = useState<"firstName" | "lastName" | "email" | null>(null)
   const [firstName, setFirstName] = useState(fields.firstName)
   const [lastName, setLastName] = useState(fields.lastName)
   const [email, setEmail] = useState(fields.email)
@@ -600,26 +612,38 @@ function DetailsForm({
         )}
       </AttributeRow>
       <AttributeRow icon={<Briefcase className="size-3.5" />} label="Employment">
-        {editing === "employment" && canManage ? (
-          <select
-            value={employment}
-            autoFocus
-            className="h-7 rounded-md border border-input bg-transparent px-2 text-sm"
-            onChange={(event) => {
-              const value = event.target.value
-              if (value === "active" || value === "inactive") setEmployment(value)
-            }}
-            onBlur={() => setEditing(null)}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+        {canManage ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex max-w-full flex-wrap gap-1 text-left">
+              <Chip tone={employment === "active" ? "green" : "gray"}>
+                {employment === "active" ? "Active" : "Inactive"}
+              </Chip>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuCheckboxItem
+                checked={employment === "active"}
+                closeOnClick={false}
+                onCheckedChange={(checked) => {
+                  if (checked) setEmployment("active")
+                }}
+              >
+                Active
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={employment === "inactive"}
+                closeOnClick={false}
+                onCheckedChange={(checked) => {
+                  if (checked) setEmployment("inactive")
+                }}
+              >
+                Inactive
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
-          <button type="button" onClick={() => canManage && setEditing("employment")}>
-            <Chip tone={employment === "active" ? "green" : "gray"}>
-              {employment === "active" ? "Active" : "Inactive"}
-            </Chip>
-          </button>
+          <Chip tone={employment === "active" ? "green" : "gray"}>
+            {employment === "active" ? "Active" : "Inactive"}
+          </Chip>
         )}
       </AttributeRow>
       <AttributeRow icon={<User className="size-3.5" />} label="Roles">

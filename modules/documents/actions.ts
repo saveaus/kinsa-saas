@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
@@ -42,10 +43,12 @@ export async function uploadDocumentAction(
   const storagePath = `${context.organisationId}/${workerId}/${documentId}/${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const { error: uploadError } = await supabase.storage.from("worker-documents").upload(storagePath, bytes, {
-    contentType: file.type,
-    upsert: false,
-  })
+  const { error: uploadError } = await supabase.storage
+    .from("worker-documents")
+    .upload(storagePath, bytes, {
+      contentType: file.type,
+      upsert: false,
+    })
   if (uploadError) return { error: uploadError.message }
 
   const { error } = await supabase.from("documents").insert({
@@ -74,6 +77,7 @@ export async function uploadDocumentAction(
   revalidatePath(`/workers/${workerId}`)
   revalidatePath("/me")
   revalidatePath("/approvals")
+  revalidateCompliance()
   return { message: "Document uploaded and waiting for review." }
 }
 
@@ -107,7 +111,7 @@ export async function reviewDocumentAction(
     { note: String(formData.get("review_note") ?? "") }
   )
   revalidatePath("/approvals")
-  revalidatePath("/dashboard")
+  revalidateCompliance()
   return { message: `Document ${decision}.` }
 }
 
@@ -161,13 +165,15 @@ export async function updateDocumentRolesAction(
   if (deleteError) return { error: deleteError.message }
 
   if (roles.length > 0) {
-    const { error: insertError } = await supabase.from("document_role_requirements").insert(
-      roles.map((staffRole) => ({
-        organisation_id: context.organisationId,
-        document_type_version_id: typeId,
-        staff_role: staffRole,
-      }))
-    )
+    const { error: insertError } = await supabase
+      .from("document_role_requirements")
+      .insert(
+        roles.map((staffRole) => ({
+          organisation_id: context.organisationId,
+          document_type_version_id: typeId,
+          staff_role: staffRole,
+        }))
+      )
     if (insertError) return { error: insertError.message }
   }
 
@@ -178,9 +184,11 @@ export async function updateDocumentRolesAction(
     .eq("document_type_version_id", typeId)
   if (requiredError) return { error: requiredError.message }
 
-  await recordAudit("document_roles.updated", "document_type", typeId, { roles })
+  await recordAudit("document_roles.updated", "document_type", typeId, {
+    roles,
+  })
   revalidatePath("/settings/credentials")
   revalidatePath("/me")
-  revalidatePath("/dashboard")
+  revalidateCompliance()
   return { message: "Credential roles saved." }
 }

@@ -28,7 +28,7 @@ export default async function MyCoursesPage() {
     .sort((a, b) => a.title.localeCompare(b.title))
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-full shrink-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-heading text-lg">My courses</h2>
         {canAssign && assigned.length > 0 ? <AssignSelfCourses workerId={workerId} courses={available} /> : null}
