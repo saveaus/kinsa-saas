@@ -36,7 +36,7 @@ test("a person log is labelled with that person", () => {
       subject: "worker",
       personName: null,
     }),
-    "Logs page, and on every worker"
+    "Sidebar, and on every worker"
   )
 })
 

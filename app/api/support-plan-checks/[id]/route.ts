@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { getSupportPlanCheck } from "@/modules/support-plan-checks/queries"
 
@@ -12,6 +13,7 @@ export async function GET(
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const check = await getSupportPlanCheck(context, id)
   if (!check?.storage_path || !check.mime_type || !check.original_filename) {
     return NextResponse.json({ error: "File not found" }, { status: 404 })

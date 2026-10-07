@@ -9,8 +9,8 @@ export default async function AdminCertificatePage({
   return (
     <CertificateScreen
       enrolmentId={id}
-      backHref="/courses"
-      backLabel="Back to courses"
+      backHref="/workers"
+      backLabel="Back to workers"
     />
   )
 }

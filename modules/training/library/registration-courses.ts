@@ -1,13 +1,26 @@
 import type { LessonContent, LessonStep } from "@/modules/training/lesson"
 
 const POLICY =
-  "Read your provider's policy for this topic alongside this course. Completing the course shows you have done the training. It does not by itself guarantee an audit outcome."
+  "Your provider's policy for this topic sets the local steps. Use it with what you learn here."
 
 type Choice = {
   prompt: string
   correct: string
   wrong: [string, string]
   feedback?: string
+}
+
+type SituationChoice = {
+  label: string
+  outcome: string
+  safe: boolean
+}
+
+type Situation = {
+  title: string
+  scene: string
+  prompt: string
+  choices: [SituationChoice, SituationChoice, SituationChoice]
 }
 
 type Section = {
@@ -30,8 +43,16 @@ type CourseSpec = {
   cover_image: string
   image: string
   sections: [Section, Section, Section, Section]
-  scenario: [Choice, Choice, Choice]
+  scenario: [Situation, Situation, Situation]
   exam: [Choice, Choice, Choice, Choice, Choice, Choice, Choice, Choice]
+}
+
+function decisionOrder<T extends { safe: boolean }>(choices: T[]) {
+  const safe = choices.filter((choice) => choice.safe)
+  const unsafe = choices.filter((choice) => !choice.safe)
+  if (safe.length !== 1 || unsafe.length === 0) return choices
+  const middle = Math.floor(unsafe.length / 2)
+  return [...unsafe.slice(0, middle), safe[0], ...unsafe.slice(middle)]
 }
 
 function options(choice: Choice) {
@@ -75,29 +96,29 @@ function lessonFor(course: CourseSpec): LessonContent {
       })
     })
   })
-  course.scenario.forEach((choice, index) => {
+  course.scenario.forEach((situation, index) => {
     steps.push({
-      id: `${course.code}-s${index + 1}`,
-      kind: "check",
-      kicker: "Scenario",
-      title: `Scenario, step ${index + 1}`,
-      prompt: choice.prompt,
-      options: options(choice),
-      correct_option_id: "a",
-      feedback: choice.feedback ?? choice.correct,
-      image: {
-        src: "/training/library/check.svg",
-        alt: "A short check on the lesson you just finished.",
-      },
+      id: `${course.code}-sit${index + 1}`,
+      kind: "situation",
+      kicker: "Situation",
+      title: situation.title,
+      scene: situation.scene,
+      prompt: situation.prompt,
+      choices: decisionOrder(situation.choices).map((choice, choiceIndex) => ({
+        id: String.fromCharCode(97 + choiceIndex),
+        label: choice.label,
+        outcome: choice.outcome,
+        safe: choice.safe,
+      })),
     })
   })
   steps.push({
     id: `${course.code}-exam`,
     kind: "exam",
-    kicker: "Exam",
+    kicker: "Check your understanding",
     title: course.title,
     intro:
-      "Answer every question. You need 80% to pass. Your score is saved on your worker record.",
+      "Answer from what this course has taught you. You need 80% to show you can use it in your work.",
     questions: course.exam.map((choice, index) => ({
       id: `${course.code}-q${index + 1}`,
       prompt: choice.prompt,
@@ -299,35 +320,83 @@ export const registrationCourses = [
     ],
     scenario: [
       {
-        prompt:
-          "Before breakfast the person is pale and shaky. They can swallow. Their plan says 15 grams of fast-acting glucose, then a recheck in 15 minutes. What do you do first?",
-        correct: "Give the 15 grams named in the plan",
-        wrong: [
-          "Give their usual breakfast insulin first",
-          "Start the shower and check again afterwards",
+        title: "Pale and shaky before breakfast",
+        scene:
+          "Before breakfast the person is pale and shaky. They can swallow. Their plan says 15 grams of fast-acting glucose, then a recheck in 15 minutes.",
+        prompt: "What do you do first?",
+        choices: [
+          {
+            label: "Give the 15 grams named in the plan",
+            outcome:
+              "You give the glucose from the plan and set a timer for the recheck. The shaking eases. The breakfast insulin stays in the kit until the plan says it is due.",
+            safe: true,
+          },
+          {
+            label: "Give their usual breakfast insulin first",
+            outcome:
+              "The insulin drops their glucose further. They become confused, and the breakfast you were about to start is no longer safe to give.",
+            safe: false,
+          },
+          {
+            label: "Start the shower and check again afterwards",
+            outcome:
+              "They are unsteady in the shower while the low is still untreated. You are now managing a fall risk and a low reading at the same time.",
+            safe: false,
+          },
         ],
-        feedback:
-          "They can swallow, and the plan names the glucose. Give that, then recheck. Insulin is not the first step for these symptoms.",
       },
       {
-        prompt:
-          "Fifteen minutes later they are themselves again and the recheck matches the plan. What do you write?",
-        correct:
-          "The time, both readings, what you gave, and that they recovered",
-        wrong: ["Nothing, because they recovered", "Only the second reading"],
-        feedback:
-          "Recovery does not remove the need for a record. Write the time, both readings, what you gave, and the response.",
+        title: "They have recovered",
+        scene:
+          "Fifteen minutes later they are themselves again. The recheck matches the plan.",
+        prompt: "What do you write?",
+        choices: [
+          {
+            label:
+              "The time, both readings, what you gave, and that they recovered",
+            outcome:
+              "The next worker can see what happened, what you gave, and that the recheck matched the plan. The record shows how the low was treated.",
+            safe: true,
+          },
+          {
+            label: "Nothing, because they recovered",
+            outcome:
+              "The next shift starts with no record of the low. If it happens again, nobody can see the pattern or what worked.",
+            safe: false,
+          },
+          {
+            label: "Only the second reading",
+            outcome:
+              "The note shows a number and nothing else. It does not say they were pale and shaky, or that you gave the glucose that settled it.",
+            safe: false,
+          },
+        ],
       },
       {
-        prompt:
-          "They ask you to give tomorrow's insulin dose early, which the plan does not allow. What do you do?",
-        correct: "Decline, and follow the plan",
-        wrong: [
-          "Give it early so the morning is easier",
-          "Give half of it as a compromise",
+        title: "An early dose",
+        scene:
+          "They ask you to give tomorrow's insulin dose early so the morning is easier. The plan does not allow that.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label: "Decline, and follow the plan",
+            outcome:
+              "The dose stays on the time the plan sets. You explain that, and the morning continues with the tasks you are signed off to do.",
+            safe: true,
+          },
+          {
+            label: "Give it early so the morning is easier",
+            outcome:
+              "The early dose is not in the plan. Their glucose falls before the meal that was meant to go with it, and you have given a medicine you were not authorised to move.",
+            safe: false,
+          },
+          {
+            label: "Give half of it as a compromise",
+            outcome:
+              "Half a dose is still a dose the plan does not authorise. You have changed the prescription on the spot, and the reading later does not match what the plan expected.",
+            safe: false,
+          },
         ],
-        feedback:
-          "A request does not change the plan. You do the tasks the plan and your sign-off allow.",
       },
     ],
     exam: [
@@ -553,38 +622,83 @@ export const registrationCourses = [
     ],
     scenario: [
       {
-        prompt:
-          "You arrive with a craft activity. The child is in the middle of helping a parent pack a bag for kinder. What do you do?",
-        correct: "Join that routine and practise the goal inside it",
-        wrong: [
-          "Stop the routine so the craft can start on time",
-          "Wait in another room until they are finished",
+        title: "Packing the kinder bag",
+        scene:
+          "You arrive with a craft activity. The child is in the middle of helping a parent pack a bag for kinder.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label: "Join that routine and practise the goal inside it",
+            outcome:
+              "You pack the bag with them. The goal is practised in the routine that was already happening, and the craft waits.",
+            safe: true,
+          },
+          {
+            label: "Stop the routine so the craft can start on time",
+            outcome:
+              "The bag is left half packed and the parent finishes it later, without the child. The visit runs to your activity, and the routine you came to support does not happen.",
+            safe: false,
+          },
+          {
+            label: "Wait in another room until they are finished",
+            outcome:
+              "The packing finishes without you. You have missed the moment the goal was available, and the craft starts after the useful part of the morning is over.",
+            safe: false,
+          },
         ],
-        feedback:
-          "The ordinary routine is the support. The prepared activity gives way to it.",
       },
       {
-        prompt:
-          "The parent can do the packing step after you model it once. What is the better next move?",
-        correct: "Let them do it, and adjust only what did not work",
-        wrong: [
-          "Keep doing it yourself so it is faster",
-          "Add three new steps before they have this one",
+        title: "They can do the step",
+        scene:
+          "The parent can do the packing step after you model it once.",
+        prompt: "What is the better next move?",
+        choices: [
+          {
+            label: "Let them do it, and adjust only what did not work",
+            outcome:
+              "They pack the bag. You step in only for the part that stalled, and that part is the one you will practise next time.",
+            safe: true,
+          },
+          {
+            label: "Keep doing it yourself so it is faster",
+            outcome:
+              "The bag is packed on time, and the parent watches. Next visit they still wait for you to do it, because the step never became theirs.",
+            safe: false,
+          },
+          {
+            label: "Add three new steps before they have this one",
+            outcome:
+              "The morning now has more steps than the family can hold. The one they had just learned gets dropped, and the visit feels harder than last time.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Once the family can do the step, it is theirs. You adjust the part that did not work.",
       },
       {
-        prompt:
-          "After four visits the child is still not joining the kinder goodbye. What do you record?",
-        correct:
-          "That participation has not changed, and that you will review the strategy",
-        wrong: [
-          "That four hours were delivered, so the goal is met",
-          "That the child was non-compliant",
+        title: "The goodbye has not changed",
+        scene:
+          "After four visits the child is still not joining the kinder goodbye.",
+        prompt: "What do you record?",
+        choices: [
+          {
+            label:
+              "That participation has not changed, and that you will review the strategy",
+            outcome:
+              "The record shows the goodbye is unchanged and that the strategy will be reviewed with the family. The next visit starts from that, not from a claim that the goal is done.",
+            safe: true,
+          },
+          {
+            label: "That four hours were delivered, so the goal is met",
+            outcome:
+              "The file says the goal is met because you attended. The child is still not joining the goodbye, and the next worker has no reason to change anything.",
+            safe: false,
+          },
+          {
+            label: "That the child was non-compliant",
+            outcome:
+              "The note blames the child. It does not say what was tried, what the family wanted, or what will change, so the strategy stays as it is.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Hours are not the outcome. Record that participation has not changed and that the strategy will be reviewed.",
       },
     ],
     exam: [
@@ -800,39 +914,84 @@ export const registrationCourses = [
     ],
     scenario: [
       {
-        prompt:
-          "A participant wants the dwelling. They already have a different provider for daily support. Your organisation also offers daily support. What do you offer?",
-        correct:
-          "The dwelling on its own, with the related-party arrangement explained",
-        wrong: [
-          "The dwelling only if they move their daily support to you",
-          "Daily support first, and the dwelling later if a room is free",
+        title: "They already have a support provider",
+        scene:
+          "A participant wants the dwelling. They already have a different provider for daily support. Your organisation also offers daily support.",
+        prompt: "What do you offer?",
+        choices: [
+          {
+            label:
+              "The dwelling on its own, with the related-party arrangement explained",
+            outcome:
+              "They can take the dwelling and keep their current support provider. The fact that you also offer daily support is explained, and it is not a condition of the offer.",
+            safe: true,
+          },
+          {
+            label: "The dwelling only if they move their daily support to you",
+            outcome:
+              "The dwelling is withheld unless they change provider. They do not have a real choice about who supports them at home, and the conflict was never declared as a choice.",
+            safe: false,
+          },
+          {
+            label: "Daily support first, and the dwelling later if a room is free",
+            outcome:
+              "You have turned a housing enquiry into a support sale. The room they asked about is not actually offered, and the two services are tied together.",
+            safe: false,
+          },
         ],
-        feedback:
-          "The dwelling is offered on its own terms. The related support service is explained, not required.",
       },
       {
-        prompt:
-          "They want their advocate to read the agreement before signing. The room is vacant now. What do you do?",
-        correct: "Wait so the advocate can help them understand the agreement",
-        wrong: [
-          "Start the stay on a handshake and send the agreement later",
-          "Tell them the room will go unless they sign today",
+        title: "The advocate has not read it",
+        scene:
+          "They want their advocate to read the agreement before signing. The room is vacant now.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label: "Wait so the advocate can help them understand the agreement",
+            outcome:
+              "The room stays vacant until the advocate has gone through the agreement with them. They sign knowing what the stay includes.",
+            safe: true,
+          },
+          {
+            label: "Start the stay on a handshake and send the agreement later",
+            outcome:
+              "They move in before they have seen the terms. When the agreement arrives, the parts they would have questioned are already in force.",
+            safe: false,
+          },
+          {
+            label: "Tell them the room will go unless they sign today",
+            outcome:
+              "They sign to keep the room, without the advocate they asked for. The agreement is in place, and they cannot say what they agreed to.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Understanding the written agreement comes before the stay. A vacancy is not a reason to skip that.",
       },
       {
-        prompt:
-          "Six months later their daily support provider changes. They ask if they have to move out. What is true?",
-        correct:
-          "The tenancy continues. Changing support provider does not end it",
-        wrong: [
-          "They must leave because the support changed",
-          "They can stay only if the new provider is one of yours",
+        title: "The support provider changes",
+        scene:
+          "Six months later their daily support provider changes. They ask if they have to move out.",
+        prompt: "What is true?",
+        choices: [
+          {
+            label:
+              "The tenancy continues. Changing support provider does not end it",
+            outcome:
+              "They stay. The tenancy follows the agreement, and the change of support provider is recorded without a notice to leave.",
+            safe: true,
+          },
+          {
+            label: "They must leave because the support changed",
+            outcome:
+              "You end the tenancy because a different organisation now provides daily support. They lose their home over a change the tenancy did not depend on.",
+            safe: false,
+          },
+          {
+            label: "They can stay only if the new provider is one of yours",
+            outcome:
+              "Staying is made conditional on using your support service. The tenancy and the daily support are tied together again, six months after they moved in.",
+            safe: false,
+          },
         ],
-        feedback:
-          "The tenancy stands on the agreement and tenancy law, not on which provider delivers daily support.",
       },
     ],
     exam: [
@@ -1060,37 +1219,82 @@ export const registrationCourses = [
     ],
     scenario: [
       {
-        prompt:
-          "The plan funds support coordination and in-home support. Your organisation can deliver the in-home support. Two other providers have capacity. What do you do?",
-        correct: "Tell them about the conflict and offer all three providers",
-        wrong: [
-          "Book your own service, since you already know the participant",
-          "Offer only your service and say the others are full",
+        title: "Your organisation can also deliver the support",
+        scene:
+          "The plan funds support coordination and in-home support. Your organisation can deliver the in-home support. Two other providers have capacity.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label: "Tell them about the conflict and offer all three providers",
+            outcome:
+              "They hear that your organisation is one of the options, and they also hear about the two others with capacity. They choose from the three.",
+            safe: true,
+          },
+          {
+            label: "Book your own service, since you already know the participant",
+            outcome:
+              "The in-home support is booked with you before they have heard there was a choice. The conflict is in the roster, and it is not in the note.",
+            safe: false,
+          },
+          {
+            label: "Offer only your service and say the others are full",
+            outcome:
+              "They accept your service because they were told there was no alternative. The other two providers had capacity, and the choice was never real.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Declare the conflict and offer the providers who have capacity, including the others.",
       },
       {
-        prompt:
-          "They choose one of the other providers. A week later no shifts have started and mornings are unsafe. What do you do?",
-        correct: "Work with them to close the gap now, and escalate the risk",
-        wrong: [
-          "Cover the morning shifts yourself",
-          "Wait for the twelve-week review",
+        title: "The mornings are uncovered",
+        scene:
+          "They choose one of the other providers. A week later no shifts have started, and mornings are unsafe.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label: "Work with them to close the gap now, and escalate the risk",
+            outcome:
+              "You contact the provider, look at who else has capacity, and escalate the risk the same day. The mornings are treated as an open risk, not as something that can wait.",
+            safe: true,
+          },
+          {
+            label: "Cover the morning shifts yourself",
+            outcome:
+              "You become the support worker. The conflict you had set aside is now the roster, and the coordination role is mixed with delivering the support.",
+            safe: false,
+          },
+          {
+            label: "Wait for the twelve-week review",
+            outcome:
+              "The mornings stay unsafe until the review date. The gap is on the file as a future agenda item, and nothing changes this week.",
+            safe: false,
+          },
         ],
-        feedback:
-          "An unsafe gap is dealt with now. You do not become the support worker, and you do not wait for the review.",
       },
       {
-        prompt: "You are leaving the role. What do you hand over?",
-        correct:
-          "What is in place, the open gap, and who the participant wants contacted",
-        wrong: [
-          "The NDIS number and a note that says see file",
-          "Nothing, because the new coordinator can call the providers",
+        title: "You are leaving",
+        scene: "You are leaving the role. The morning gap is still open.",
+        prompt: "What do you hand over?",
+        choices: [
+          {
+            label:
+              "What is in place, the open gap, and who the participant wants contacted",
+            outcome:
+              "The next coordinator can see what is funded, which mornings are still unsafe, and who to call. They start from the gap, not from an empty file.",
+            safe: true,
+          },
+          {
+            label: "The NDIS number and a note that says see file",
+            outcome:
+              "The handover identifies the person and nothing about the support. The next coordinator has to reconstruct the gap, and the unsafe mornings continue while they do.",
+            safe: false,
+          },
+          {
+            label: "Nothing, because the new coordinator can call the providers",
+            outcome:
+              "There is no record of who was chosen, what is in place, or that mornings are uncovered. The new coordinator starts from scratch, and the participant repeats it.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Handover names what is in place, what is unresolved, and who to contact.",
       },
     ],
     exam: [
@@ -1314,40 +1518,86 @@ export const registrationCourses = [
     ],
     scenario: [
       {
-        prompt:
-          "A provider asks you to write a plan that lets them lock the pantry, because food budgeting is hard and a previous plan did not mention it. What do you do first?",
-        correct:
-          "Find out what the behaviour is and whether a less restrictive strategy can meet the need",
-        wrong: [
-          "Add the lock so the budget is protected",
-          "Copy the request into an interim plan that does not expire",
+        title: "A request to lock the pantry",
+        scene:
+          "A provider asks you to write a plan that lets them lock the pantry, because food budgeting is hard and a previous plan did not mention it.",
+        prompt: "What do you do first?",
+        choices: [
+          {
+            label:
+              "Find out what the behaviour is and whether a less restrictive strategy can meet the need",
+            outcome:
+              "You start with what is actually happening around food, and with what else could meet the need. The lock is not written in until that is done, and only if it is the least restriction that prevents harm.",
+            safe: true,
+          },
+          {
+            label: "Add the lock so the budget is protected",
+            outcome:
+              "The plan now authorises a lock for convenience. Food access is restricted without a behaviour assessment, and the budget problem is treated as a restrictive practice.",
+            safe: false,
+          },
+          {
+            label: "Copy the request into an interim plan that does not expire",
+            outcome:
+              "The lock is in force with no end date. What was asked for as a stopgap becomes the ongoing plan, and the full assessment never replaces it.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Start with the behaviour and the least restrictive response. A lock for convenience is not the starting point, and an interim plan is not a permanent one.",
       },
       {
-        prompt:
-          "The house says they cannot run the proactive strategy on the current roster. What do you change?",
-        correct:
-          "The plan, with them, so the strategy is one they can actually do",
-        wrong: [
-          "Nothing. Implementation is their problem",
-          "Add a restrictive practice to replace the strategy they will not do",
+        title: "The roster cannot run the strategy",
+        scene:
+          "The house says they cannot run the proactive strategy on the current roster.",
+        prompt: "What do you change?",
+        choices: [
+          {
+            label:
+              "The plan, with them, so the strategy is one they can actually do",
+            outcome:
+              "You change the strategy with the people who will use it. The next version is something the current roster can do, and they know what changed and why.",
+            safe: true,
+          },
+          {
+            label: "Nothing. Implementation is their problem",
+            outcome:
+              "The strategy stays in the plan and stays unused. The review later finds a plan that was never implemented, and the behaviour is unchanged.",
+            safe: false,
+          },
+          {
+            label:
+              "Add a restrictive practice to replace the strategy they will not do",
+            outcome:
+              "Restriction is added because the roster is short. The person is now restricted to cover a strategy the house said they could not run.",
+            safe: false,
+          },
         ],
-        feedback:
-          "A strategy the house cannot do will not be used. Change it with them. Do not replace it with more restriction.",
       },
       {
-        prompt:
-          "During the month a worker used a restrictive practice that was not in the plan, and the person was hurt. The manager asks you to leave it off the incident report. You:",
-        correct:
-          "Refuse, expect the incident to be reported, and review the plan",
-        wrong: [
-          "Leave it off and extend the interim plan",
-          "Note it privately and wait for the annual review",
+        title: "A practice that was not in the plan",
+        scene:
+          "During the month a worker used a restrictive practice that was not in the plan, and the person was hurt. The manager asks you to leave it off the incident report.",
+        prompt: "What do you do?",
+        choices: [
+          {
+            label:
+              "Refuse, expect the incident to be reported, and review the plan",
+            outcome:
+              "The incident is reported, including the practice that was not in the plan and the harm. You review the plan with the people who implement it.",
+            safe: true,
+          },
+          {
+            label: "Leave it off and extend the interim plan",
+            outcome:
+              "The harm is missing from the incident report, and the interim plan is stretched to cover a practice that was used outside it. The record no longer matches what happened.",
+            safe: false,
+          },
+          {
+            label: "Note it privately and wait for the annual review",
+            outcome:
+              "The injury sits in a private note until the annual review. The provider's incident record does not show it, and the plan stays as it was on the day the person was hurt.",
+            safe: false,
+          },
         ],
-        feedback:
-          "Harm from a practice that was not in the plan is reported. You review the plan. You do not help omit it.",
       },
     ],
     exam: [

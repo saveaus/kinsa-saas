@@ -1,6 +1,8 @@
 const verbs: Record<string, string> = {
   "document.approved": "approved a document",
+  "document.flagged": "flagged a document for a person to check",
   "document.rejected": "rejected a document",
+  "document.pending": "returned a document to pending",
   "document.uploaded": "uploaded a document",
   "document.viewed": "viewed a document",
   "document_roles.updated": "updated credential roles",
@@ -9,6 +11,7 @@ const verbs: Record<string, string> = {
   "worker.deleted": "deleted a worker",
   "worker.invited": "invited a worker",
   "reminder.sent": "sent a reminder",
+  "reminder.failed": "could not send a reminder",
   "reminder_rule.created": "created a reminder rule",
   "reminder_rule.updated": "updated a reminder rule",
   "reminder_rule.deleted": "deleted a reminder rule",
@@ -24,9 +27,14 @@ const verbs: Record<string, string> = {
   "organisation.logo_updated": "updated the organisation logo",
   "organisation.logo_removed": "removed the organisation logo",
   "organisation.identity_updated": "updated business details",
+  "billing.updated": "updated billing",
+  "team.created": "created a team",
+  "team.updated": "updated a team",
+  "team.deleted": "removed a team",
   "admin.invited": "invited an administrator",
   "policy.drafted": "saved a policy draft",
   "policy.accepted": "accepted a policy",
+  "policy.acknowledged": "acknowledged a policy",
   "policy.draft_removed": "removed a policy draft",
   "policy.viewed": "viewed a policy",
   "participant.added": "added a participant",
@@ -78,11 +86,43 @@ const workerVerbs: Record<string, string> = {
   "report.exported": "exported this record",
 }
 
+function assistantChecked(metadata: unknown) {
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    !Array.isArray(metadata) &&
+    "source" in metadata &&
+    metadata.source === "assistant"
+  )
+}
+
+function inviteWasNotEmailed(metadata: unknown) {
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    !Array.isArray(metadata) &&
+    "emailed" in metadata &&
+    metadata.emailed === false
+  )
+}
+
 export function auditSentence(
   action: string,
   targetType: string,
-  scope: "org" | "worker" = "org"
+  scope: "org" | "worker" = "org",
+  metadata?: unknown
 ) {
+  if (action === "document.approved" && assistantChecked(metadata)) {
+    return "had the assistant approve a document"
+  }
+  if (action === "document.flagged") {
+    return "had the assistant flag a document for a person to check"
+  }
+  if (action === "worker.invited" && inviteWasNotEmailed(metadata)) {
+    return scope === "worker"
+      ? "saved an invite for this worker, but the email was not sent"
+      : "saved an invite, but the email was not sent"
+  }
   const map = scope === "worker" ? workerVerbs : verbs
   return (
     map[action] ??

@@ -41,7 +41,7 @@ export default function ResetPasswordPage() {
             </div>
           </ActionForm>
           <p className="text-sm text-muted-foreground">
-            <Link href="/login" className="underline">
+            <Link href="/login" className="text-primary underline">
               Back to sign in
             </Link>
           </p>

@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { AddPolicyDialog } from "@/components/add-policy-dialog"
+import { PolicyLibraryDialog } from "@/components/policy-library-dialog"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { formatDate } from "@/lib/format-date"
 import {
@@ -8,6 +9,7 @@ import {
   standardsGrouped,
 } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { listPolicies } from "@/modules/policies/queries"
 import {
   policyStanding,
@@ -23,8 +25,18 @@ const standingTone = {
 export default async function PoliciesPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const grouped = standardsGrouped(context.organisationRegistrationGroups)
   const policies = grouped.length > 0 ? await listPolicies(context) : []
+  const taken = new Set(policies.map((policy) => policy.standard_code))
+  const libraryGroups = grouped
+    .map((group) => ({
+      module: group.module,
+      standards: group.standards.filter(
+        (standard) => !taken.has(standard.code)
+      ),
+    }))
+    .filter((group) => group.standards.length > 0)
 
   const rows: RecordRow[] = policies.map((policy) => {
     const standing = policyStanding(policy.status, policy.review_on)
@@ -38,27 +50,25 @@ export default async function PoliciesPage() {
         },
         review: { kind: "text", text: formatDate(policy.review_on) },
         status: {
-          kind: "chip",
+          kind: "recordStatus",
           text: policyStandingLabel[standing],
           tone: standingTone[standing],
+          draft: policy.status === "draft",
+          acceptedLabel:
+            policyStandingLabel[policyStanding("accepted", policy.review_on)],
+          acceptedTone:
+            standingTone[policyStanding("accepted", policy.review_on)],
+          target: { kind: "policy", id: policy.id },
         },
         source: {
           kind: "text",
-          text: policy.drafted_by === "assistant" ? "Assistant" : "Person",
+          text: policy.mime_type ? "Uploaded" : "Library",
         },
         file: {
-          kind: "policyFile",
-          text: "View",
-          policyId: policy.id,
-          name: policy.name,
-          filename: policy.original_filename,
-          mimeType: policy.mime_type,
-        },
-        record: {
-          kind: "policyDraft",
-          text: policy.status === "draft" ? "Accept" : "Accepted",
-          policyId: policy.id,
-          draft: policy.status === "draft",
+          kind: "link",
+          text: "Open",
+          href: `/policies/${policy.id}`,
+          compact: true,
         },
       },
     }
@@ -67,14 +77,15 @@ export default async function PoliciesPage() {
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
-        A policy counts once it is accepted. The review date then shows current
-        or review overdue.
+        A policy counts once it is accepted and either acknowledged or linked to
+        an accepted record. Drafts do not count. The review date then shows
+        current or review overdue.
         {grouped.length === 0 ? (
           <>
             {" "}
             <Link
               href="/settings/general"
-              className="text-foreground underline"
+              className="text-primary underline"
             >
               Add registration groups
             </Link>{" "}
@@ -85,20 +96,32 @@ export default async function PoliciesPage() {
       <RecordTable
         title="Policies"
         actions={
-          grouped.length > 0 ? <AddPolicyDialog groups={grouped} /> : null
+          grouped.length > 0 ? (
+            <div className="flex gap-2">
+              {libraryGroups.length > 0 ? (
+                <PolicyLibraryDialog
+                  key={libraryGroups.reduce(
+                    (count, group) => count + group.standards.length,
+                    0
+                  )}
+                  groups={libraryGroups}
+                />
+              ) : null}
+              <AddPolicyDialog groups={grouped} />
+            </div>
+          ) : null
         }
         columns={[
-          { id: "name", label: "Name" },
-          { id: "standard", label: "Practice standard" },
-          { id: "review", label: "Next review" },
-          { id: "status", label: "Status" },
-          { id: "source", label: "Source" },
-          { id: "file", label: "File", locked: true },
-          { id: "record", label: "Record", locked: true },
+          { id: "name", label: "Name", clip: true },
+          { id: "standard", label: "Practice standard", clip: true },
+          { id: "review", label: "Next review", width: "8.75rem" },
+          { id: "status", label: "Status", width: "9.25rem" },
+          { id: "source", label: "Source", width: "6.5rem" },
+          { id: "file", label: "File", locked: true, width: "5.75rem" },
         ]}
         rows={rows}
         empty="No policies yet"
-        emptyDescription="Add a policy and accept it so the review date counts."
+        emptyDescription="Start from the library or upload a policy. It counts after it is accepted and acknowledged or linked to a record."
       />
     </div>
   )

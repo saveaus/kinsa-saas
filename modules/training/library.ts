@@ -36,10 +36,11 @@ export function libraryLesson(
   code: string | null | undefined,
   stored: Json | null
 ): LessonContent | null {
-  const parsed = parseLesson(stored)
-  if (parsed) return parsed
-  if (!code) return null
-  return lessons.get(code) ?? null
+  if (code) {
+    const platform = lessons.get(code)
+    if (platform) return platform
+  }
+  return parseLesson(stored)
 }
 
 export function libraryStepCount(

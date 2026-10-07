@@ -4,14 +4,10 @@ import { revalidatePath } from "next/cache"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
-import {
-  logSlug,
-  type LogScope,
-  type LogSubject,
-} from "@/modules/logs/standing"
 
-export type LogActionState = { error?: string; message?: string }
+export type LogActionState = { error?: string; message?: string; href?: string }
 
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
 const MAX_BYTES = 10 * 1024 * 1024
@@ -28,7 +24,6 @@ function refresh(
   workerId?: string | null
 ) {
   revalidatePath("/logs")
-  revalidatePath("/settings/logs")
   revalidatePath("/activity")
   if (slug) revalidatePath(`/logs/${slug}`)
   if (participantId) revalidatePath(`/participants/${participantId}`)
@@ -41,6 +36,8 @@ export async function setLogVisibleAction(
 ): Promise<LogActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from("log_registers")
@@ -60,116 +57,6 @@ export async function setLogVisibleAction(
   return { message: visible ? "Log shown." : "Log hidden." }
 }
 
-export async function createLogRegisterAction(
-  _prev: LogActionState,
-  formData: FormData
-): Promise<LogActionState> {
-  const { context } = await requireTenant()
-  requirePermission(context, "settings.manage")
-  const name = clean(formData.get("name"))
-  const place = String(formData.get("place") ?? "")
-  const about = String(formData.get("about") ?? "")
-  const participantId = String(formData.get("participant_id") ?? "")
-  const workerId = String(formData.get("worker_id") ?? "")
-
-  if (name.length < 1 || name.length > 60) {
-    return { error: "Enter a name up to 60 characters." }
-  }
-
-  let scope: LogScope
-  let subject: LogSubject
-  let personParticipant: string | null = null
-  let personWorker: string | null = null
-  if (place === "sidebar") {
-    scope = "global"
-    if (
-      about === "organisation" ||
-      about === "participant" ||
-      about === "worker"
-    ) {
-      subject = about
-    } else {
-      return { error: "Choose what the entries are about." }
-    }
-  } else if (place === "person") {
-    scope = "person"
-    if (participantId) {
-      subject = "participant"
-      personParticipant = participantId
-    } else if (workerId) {
-      subject = "worker"
-      personWorker = workerId
-    } else {
-      return { error: "Choose the person this log belongs to." }
-    }
-  } else {
-    return { error: "Choose where this log appears." }
-  }
-
-  const supabase = await createServerSupabase()
-  if (personParticipant) {
-    const { data } = await supabase
-      .from("participants")
-      .select("id")
-      .eq("id", personParticipant)
-      .eq("organisation_id", context.organisationId)
-      .maybeSingle()
-    if (!data) return { error: "That participant is no longer on the list." }
-  }
-  if (personWorker) {
-    const { data } = await supabase
-      .from("workers")
-      .select("id")
-      .eq("id", personWorker)
-      .eq("organisation_id", context.organisationId)
-      .is("deleted_at", null)
-      .maybeSingle()
-    if (!data) return { error: "That worker is no longer on the list." }
-  }
-
-  const base = logSlug(name)
-  const { data: existing } = await supabase
-    .from("log_registers")
-    .select("slug")
-    .eq("organisation_id", context.organisationId)
-    .like("slug", `${base}%`)
-  const taken = new Set((existing ?? []).map((row) => row.slug))
-  let slug = base
-  let suffix = 2
-  while (taken.has(slug)) {
-    slug = `${base}-${suffix}`
-    suffix += 1
-  }
-
-  const { data, error } = await supabase
-    .from("log_registers")
-    .insert({
-      organisation_id: context.organisationId,
-      name,
-      slug,
-      scope,
-      subject,
-      participant_id: personParticipant,
-      worker_id: personWorker,
-    })
-    .select("id")
-    .single()
-
-  if (error) {
-    if (error.code === "23505") {
-      return { error: "A log with that name already exists." }
-    }
-    return { error: error.message }
-  }
-  await recordAudit("log.created", "log_register", data.id, {
-    name,
-    scope,
-    subject,
-  })
-  refresh(slug, personParticipant, personWorker)
-  return { message: "Log added." }
-}
-
 export async function deleteLogRegisterAction(
   registerId: string,
   _prev: LogActionState,
@@ -177,6 +64,8 @@ export async function deleteLogRegisterAction(
 ): Promise<LogActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const supabase = await createServerSupabase()
   const { data: register, error: readError } = await supabase
     .from("log_registers")
@@ -230,6 +119,8 @@ export async function createLogEntryAction(
 ): Promise<LogActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const registerId = String(formData.get("register_id") ?? "")
   const intent = String(formData.get("intent") ?? "")
   const summary = clean(formData.get("summary"))
@@ -334,6 +225,8 @@ export async function acceptLogEntryAction(
 ): Promise<LogActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from("log_entries")
@@ -371,6 +264,8 @@ export async function deleteLogEntryDraftAction(
 ): Promise<LogActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const supabase = await createServerSupabase()
   const { data: existing, error: readError } = await supabase
     .from("log_entries")
@@ -400,3 +295,4 @@ export async function deleteLogEntryDraftAction(
   refresh(register?.slug, existing.participant_id, existing.worker_id)
   return { message: "Draft removed." }
 }
+

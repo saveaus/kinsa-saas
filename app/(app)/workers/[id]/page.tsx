@@ -1,28 +1,22 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { notFound } from "next/navigation"
 
-import { PersonLogSections } from "@/components/person-log-sections"
 import { WorkerRecord } from "@/components/worker-record"
-import type { ChipTone } from "@/components/chip"
 import { formatRelativeDay } from "@/lib/format-date"
+import { personName } from "@/lib/person-name"
 import { expiryLabel } from "@/lib/expiry-label"
-import { createServerSupabase } from "@/lib/supabase/server"
 import { can, requirePermission, requireTenant } from "@/lib/tenant"
 import { listWorkerActivity } from "@/modules/audit/queries"
-import { listLogRegisters, listPersonLogEntries } from "@/modules/logs/queries"
-import { logOnPerson } from "@/modules/logs/standing"
 import { auditSentence } from "@/modules/audit/sentence"
 import { computeWorkerCompliance } from "@/modules/documents/compliance"
 import { uploadDocumentAction } from "@/modules/documents/actions"
+import { documentReviewLabel, documentReviewTone } from "@/modules/documents/assist-decision"
 import {
   getLapsingWindowDays,
   listDocumentsForWorker,
   listEnabledTypes,
 } from "@/modules/documents/queries"
-import {
-  listWorkerCourseRows,
-  listWorkerEnrolments,
-} from "@/modules/training/queries"
+import { listTeams } from "@/modules/teams/queries"
 import {
   deleteWorkerAction,
   inviteWorkerAction,
@@ -51,37 +45,24 @@ export default async function WorkerDetailPage({
   const worker = await getWorker(context, id)
   if (!worker) notFound()
 
-  const [
-    documents,
-    types,
-    enrolments,
-    assignedCourses,
-    lapsingWindowDays,
-    requirementMaps,
-  ] = await Promise.all([
-    listDocumentsForWorker(context, id),
-    listEnabledTypes(context),
-    listWorkerEnrolments(context, id),
-    listWorkerCourseRows(context, id),
-    getLapsingWindowDays(context),
-    listRequirementMaps(context),
-  ])
+  const [documents, types, lapsingWindowDays, requirementMaps, teams] =
+    await Promise.all([
+      listDocumentsForWorker(context, id),
+      listEnabledTypes(context),
+      getLapsingWindowDays(context),
+      listRequirementMaps(context),
+      listTeams(context),
+    ])
 
-  const supabase = await createServerSupabase()
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("*")
-    .eq("organisation_id", context.organisationId)
-    .eq("status", "published")
-  const scoped = attachRequirementRoles(courses ?? [], types, requirementMaps)
+  const scoped = attachRequirementRoles([], types, requirementMaps)
 
   const compliance = computeWorkerCompliance({
     workerId: worker.id,
     workerRoles: asStaffRoles(worker.staff_roles),
     types: scoped.types,
     documents,
-    courses: scoped.courses,
-    enrolments,
+    courses: [],
+    enrolments: [],
     lapsingWindowDays,
   })
 
@@ -94,14 +75,6 @@ export default async function WorkerDetailPage({
     )
 
   const canManage = can(context, "workers.manage")
-  const manageLogs = can(context, "settings.manage")
-  const logRegisters = manageLogs ? await listLogRegisters(context) : []
-  const logEntries = manageLogs
-    ? await listPersonLogEntries(context, { workerId: worker.id })
-    : []
-  const workerLogs = logRegisters.filter((log) =>
-    logOnPerson(log, { workerId: worker.id })
-  )
   const activityBase = `/workers/${worker.id}`
   const activityHref = (page: number) =>
     page <= 1
@@ -110,7 +83,7 @@ export default async function WorkerDetailPage({
 
   return (
     <WorkerRecord
-      name={`${worker.first_name} ${worker.last_name}`}
+      name={personName(worker.first_name, worker.last_name)}
       email={worker.email}
       initials={`${worker.first_name[0] ?? ""}${worker.last_name[0] ?? ""}`.toUpperCase()}
       canManage={canManage}
@@ -131,7 +104,7 @@ export default async function WorkerDetailPage({
           id: event.id,
           year: format(date, "yyyy"),
           period: days < 7 ? "This week" : format(date, "MMMM"),
-          sentence: `${event.actorName} ${auditSentence(event.action, event.target_type, "worker")}`,
+          sentence: `${event.actorName} ${auditSentence(event.action, event.target_type, "worker", event.metadata)}`,
           when: formatRelativeDay(event.created_at),
         }
       })}
@@ -145,29 +118,17 @@ export default async function WorkerDetailPage({
         key: item.key,
         label: item.label,
         status: item.status,
-        href:
-          item.kind === "course"
-            ? "#courses"
-            : item.status === "pending"
-              ? "/approvals"
-              : "#upload",
+        href: item.status === "pending" ? "/approvals" : "#upload",
       }))}
-      courses={assignedCourses}
       files={documents.map((document) => {
         const type = document.document_type_versions as unknown as {
           name: string
         }
-        const tone: ChipTone =
-          document.approval_status === "approved"
-            ? "green"
-            : document.approval_status === "rejected"
-              ? "red"
-              : "orange"
         return {
           id: document.id,
           name: type.name,
-          status: document.approval_status,
-          tone,
+          status: documentReviewLabel(document.approval_status, document.flagged),
+          tone: documentReviewTone(document.approval_status, document.flagged),
           expiry: expiryLabel(document.expires_on, lapsingWindowDays),
         }
       })}
@@ -180,15 +141,7 @@ export default async function WorkerDetailPage({
       uploadAction={uploadDocumentAction.bind(null, worker.id)}
       csvHref={`/api/export/worker/${worker.id}`}
       pdfHref={`/api/export/worker/${worker.id}?format=pdf`}
-      logs={
-        workerLogs.length > 0 ? (
-          <PersonLogSections
-            logs={logRegisters}
-            entries={logEntries}
-            workerId={worker.id}
-          />
-        ) : undefined
-      }
+      roleOptions={teams.map((team) => ({ code: team.code, name: team.name }))}
     />
   )
 }

@@ -88,19 +88,13 @@ export async function IncidentRegister({ kind }: { kind: IncidentKind }) {
             }
           : { kind: "text", text: "—" },
         status: {
-          kind: "chip",
+          kind: "recordStatus",
           text: incidentStandingLabel(standing),
           tone: standingTone[standing],
-        },
-        source: {
-          kind: "text",
-          text: incident.drafted_by === "assistant" ? "Assistant" : "Person",
-        },
-        record: {
-          kind: "incidentDraft",
-          text: incident.status === "draft" ? "Accept" : "Recorded",
-          incidentId: incident.id,
           draft: incident.status === "draft",
+          acceptedLabel: incidentStandingLabel("recorded"),
+          acceptedTone: standingTone.recorded,
+          target: { kind: "incident", id: incident.id },
         },
         file: {
           kind: "incidentFile",
@@ -134,8 +128,6 @@ export async function IncidentRegister({ kind }: { kind: IncidentKind }) {
           { id: "date", label: "Date" },
           { id: "participant", label: "Participant" },
           { id: "status", label: "Status" },
-          { id: "source", label: "Source" },
-          { id: "record", label: "Record", locked: true },
           { id: "file", label: "File", locked: true },
         ]}
         rows={rows}

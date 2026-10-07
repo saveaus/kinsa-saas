@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import type { ParticipantRecordKind } from "@/modules/participants/standing"
 
@@ -51,7 +52,6 @@ function refresh(participantId?: string) {
   revalidatePath("/incidents")
   revalidatePath("/support-plan-checks")
   revalidatePath("/activity")
-  revalidatePath("/settings/logs")
   if (participantId) revalidatePath(`/participants/${participantId}`)
 }
 
@@ -61,6 +61,8 @@ export async function createParticipantAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const name = cleanName(formData.get("name"))
   const ndisNumber = String(formData.get("ndis_number") ?? "").trim()
@@ -105,6 +107,8 @@ export async function setParticipantActiveAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
@@ -137,6 +141,8 @@ export async function deleteParticipantAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data: files, error: readError } = await supabase
@@ -250,6 +256,8 @@ export async function createParticipantRecordAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const participantId = String(formData.get("participant_id") ?? "")
   const kind = recordKind(String(formData.get("kind") ?? ""))
@@ -362,6 +370,8 @@ export async function acceptParticipantRecordAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
@@ -407,6 +417,8 @@ export async function deleteParticipantRecordDraftAction(
 ): Promise<ParticipantActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data: existing, error: readError } = await supabase

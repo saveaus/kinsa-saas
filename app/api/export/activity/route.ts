@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { parseDayKey } from "@/modules/audit/activity-calendar"
 import { activityCsv } from "@/modules/audit/export"
 import { listAllAuditEvents, type AuditFilters } from "@/modules/audit/queries"
@@ -9,6 +10,7 @@ import { recordAudit } from "@/modules/audit/write"
 export async function GET(request: Request) {
   const { context } = await requireTenant()
   requirePermission(context, "audit.read")
+  await requireRegistered(context)
 
   const params = new URL(request.url).searchParams
   const dayParam = params.get("day")

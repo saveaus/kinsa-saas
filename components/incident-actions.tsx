@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { ActionForm } from "@/components/action-form"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  acceptIncidentAction,
-  deleteIncidentDraftAction,
-} from "@/modules/incidents/actions"
 import {
   incidentListPath,
   type IncidentKind,
@@ -76,27 +71,5 @@ export function IncidentFileButton({
         </Link>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function IncidentDraftActions({ incidentId }: { incidentId: string }) {
-  return (
-    <div className="flex gap-1">
-      <ActionForm
-        action={acceptIncidentAction.bind(null, incidentId)}
-        submitLabel="Accept"
-        pendingLabel="Accepting..."
-        submitSize="sm"
-        className="w-fit"
-      />
-      <ActionForm
-        action={deleteIncidentDraftAction.bind(null, incidentId)}
-        submitLabel="Remove"
-        pendingLabel="Removing..."
-        submitVariant="outline"
-        submitSize="sm"
-        className="w-fit"
-      />
-    </div>
   )
 }

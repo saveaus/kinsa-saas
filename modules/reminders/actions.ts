@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { parseReminderCategory } from "@/modules/reminders/categories"
 
@@ -16,6 +17,8 @@ export async function upsertReminderRuleAction(
 ): Promise<ReminderActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "reminders.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const category = parseReminderCategory(String(formData.get("category") ?? ""))
   const daysBefore = Number(formData.get("days_before") ?? 30)
@@ -70,6 +73,8 @@ export async function deleteReminderRuleAction(
 ): Promise<ReminderActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "reminders.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const supabase = await createServerSupabase()
   const { error } = await supabase
     .from("reminder_rules")

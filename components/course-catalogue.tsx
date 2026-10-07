@@ -1,7 +1,9 @@
 "use client"
 
 import { Check } from "lucide-react"
-import { useActionState, useState } from "react"
+import { useActionState, useMemo, useState } from "react"
+
+import { cn } from "cn"
 
 import { CourseCard } from "@/components/course-card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,8 +18,19 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { RecordTable, type RecordRow } from "@/components/record-table"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { assignCoursesAction } from "@/modules/training/actions"
-import { courseFamily, courseFamilyOrder, courseKindLabel, renewalLabel } from "@/modules/training/display"
+import {
+  courseFamilyOrder,
+  courseKindLabel,
+  courseLengthLabel,
+  courseLengthOrder,
+  courseTopic,
+  learningGroup,
+  learningGroupOrder,
+  type CourseLength,
+  type LearningGroup,
+} from "@/modules/training/display"
 
 export type CatalogueWorker = {
   id: string
@@ -38,6 +51,7 @@ export type CatalogueCourse = {
   kind: string
   audience: string | null
   parentCode: string | null
+  steps: number
 }
 
 export function CourseCatalogue({
@@ -51,31 +65,50 @@ export function CourseCatalogue({
   const [assignOpen, setAssignOpen] = useState(false)
   const [formKey, setFormKey] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
+  const [topic, setTopic] = useState("")
+  const [group, setGroup] = useState("")
+  const [length, setLength] = useState("")
+  const [kind, setKind] = useState("")
+  const [requirement, setRequirement] = useState("")
   const selectedCourses = courses.filter((course) => selected.includes(course.id))
-  const titleByCode = new Map(courses.flatMap((course) => (course.code ? [[course.code, course.title] as const] : [])))
+  const listed = useMemo(() => listCatalogue(courses), [courses])
+  const filtered = listed.filter((course) => {
+    if (topic && course.topic !== topic) return false
+    if (group && course.group !== group) return false
+    if (length && course.length !== length) return false
+    if (kind && course.typeLabel !== kind) return false
+    if (requirement === "required" && !course.required) return false
+    if (requirement === "optional" && course.required) return false
+    return true
+  })
+  const topics = courseFamilyOrder.filter((name) => listed.some((course) => course.topic === name))
+  const groups = learningGroupOrder.filter((name) => listed.some((course) => course.group === name))
+  const lengths = courseLengthOrder
+    .filter((name) => listed.some((course) => course.length === name))
+    .map((name) => ({ value: name, label: lengthChoice(name) }))
+  const kinds = ["Course", "Bite", "Checkpoint", "Resource hub"].filter((name) =>
+    listed.some((course) => course.typeLabel === name)
+  )
+  const filtersActive = Boolean(topic || group || length || kind || requirement)
 
-  const rows: RecordRow[] = courses.map((course) => ({
+  const rows: RecordRow[] = filtered.map((course) => ({
     id: course.id,
-    searchText: [course.description, course.parentCode ? titleByCode.get(course.parentCode) : null]
-      .filter(Boolean)
-      .join(" "),
+    searchText: [course.description, course.code, course.audience, course.parentTitle].filter(Boolean).join(" "),
     cells: {
-      course: { kind: "link", text: course.title, href: `/courses/${course.id}` },
-      code: { kind: "text", text: course.code ?? "—" },
-      family: { kind: "chip", text: courseFamily(course.code), tone: "gray" },
-      type: { kind: "chip", text: courseKindLabel(course.kind), tone: course.kind === "course" ? "blue" : "purple" },
-      audience: { kind: "text", text: course.audience ?? "—" },
+      course: {
+        kind: "link",
+        text: course.title,
+        href: `/courses/${course.id}`,
+        detail: course.description ?? undefined,
+      },
+      topic: { kind: "chip", text: course.topic, tone: "gray" },
+      group: { kind: "text", text: course.group },
+      length: { kind: "text", text: partsLabel(course.steps) },
+      type: { kind: "chip", text: course.typeLabel, tone: course.kind === "course" ? "blue" : "purple" },
       requirement: {
         kind: "chip",
         text: course.required ? "Required" : "Optional",
         tone: course.required ? "blue" : "gray",
-      },
-      pass: { kind: "text", text: `${course.pass_mark}%` },
-      renewal: { kind: "text", text: renewalLabel(course.renewal_months) ?? "—" },
-      status: {
-        kind: "chip",
-        text: course.status,
-        tone: course.status === "published" ? "green" : "gray",
       },
     },
   }))
@@ -88,8 +121,15 @@ export function CourseCatalogue({
           <p>{notice}</p>
         </div>
       ) : null}
+      <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Topic">
+        <TopicChip label="All topics" pressed={topic === ""} onClick={() => setTopic("")} />
+        {topics.map((name) => (
+          <TopicChip key={name} label={name} pressed={topic === name} onClick={() => setTopic(name)} />
+        ))}
+      </div>
       <RecordTable
-        title="All courses"
+        title={topic || "Courses"}
+        pageSize={200}
         selectable
         selectedIds={selected}
         onSelectedChange={setSelected}
@@ -108,21 +148,57 @@ export function CourseCatalogue({
               : `Assign ${selected.length} ${selected.length === 1 ? "course" : "courses"}`}
           </Button>
         }
+        toolbar={
+          <>
+            <CatalogueFilter
+              label="Who it's for"
+              value={group}
+              options={groups}
+              onChange={setGroup}
+            />
+            <CatalogueFilter label="Length" value={length} options={lengths} onChange={setLength} />
+            <CatalogueFilter label="Type" value={kind} options={kinds} onChange={setKind} />
+            <CatalogueFilter
+              label="Requirement"
+              value={requirement}
+              options={[
+                { value: "required", label: "Required" },
+                { value: "optional", label: "Optional" },
+              ]}
+              onChange={setRequirement}
+            />
+            {filtersActive ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  setTopic("")
+                  setGroup("")
+                  setLength("")
+                  setKind("")
+                  setRequirement("")
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </>
+        }
         columns={[
           { id: "course", label: "Course" },
-          { id: "code", label: "Code" },
-          { id: "family", label: "Family" },
+          { id: "topic", label: "Topic" },
+          { id: "group", label: "Who it's for" },
+          { id: "length", label: "Length" },
           { id: "type", label: "Type" },
-          { id: "audience", label: "Audience" },
           { id: "requirement", label: "Requirement" },
-          { id: "pass", label: "Pass mark" },
-          { id: "renewal", label: "Renewal" },
-          { id: "status", label: "Status" },
         ]}
         rows={rows}
         empty="No courses match those filters."
+        emptyDescription="Choose another topic, or clear the other filters."
         renderCard={(row, selecting) => {
-          const course = courses.find((item) => item.id === row.id)
+          const course = listed.find((item) => item.id === row.id)
           if (!course) return null
           return (
             <ModuleCard
@@ -135,7 +211,7 @@ export function CourseCatalogue({
         }}
         renderCardGrid={(visibleRows, selecting) => (
           <ModuleCardGrid
-            courses={courses}
+            courses={listed}
             visibleIds={visibleRows.map((row) => row.id)}
             selecting={selecting}
             selected={selected}
@@ -186,7 +262,7 @@ function ModuleCard({
   selected,
   onToggle,
 }: {
-  course: CatalogueCourse
+  course: ListedCourse
   selecting: boolean
   selected: boolean
   onToggle: () => void
@@ -200,7 +276,12 @@ function ModuleCard({
         title={course.title}
         description={course.description}
         imageSrc={course.cover_image}
-        label={courseKindLabel(course.kind)}
+        label={course.typeLabel}
+        chips={[
+          { label: course.group, tone: "gray" },
+          { label: partsLabel(course.steps), tone: "gray" },
+          ...(course.required ? [{ label: "Required", tone: "blue" as const }] : []),
+        ]}
       />
     </div>
   )
@@ -213,7 +294,7 @@ function ModuleCardGrid({
   selected,
   onToggle,
 }: {
-  courses: CatalogueCourse[]
+  courses: ListedCourse[]
   visibleIds: string[]
   selecting: boolean
   selected: string[]
@@ -223,13 +304,13 @@ function ModuleCardGrid({
   const shown = courses.filter((course) => visible.has(course.id))
 
   const families = courseFamilyOrder.flatMap((family) => {
-    const inFamily = shown.filter((course) => courseFamily(course.code) === family)
+    const inFamily = shown.filter((course) => course.topic === family)
     if (inFamily.length === 0) return []
     return [{ family, courses: inFamily }]
   })
 
   if (families.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">No records match.</p>
+    return <p className="py-10 text-center text-sm text-muted-foreground">No courses match those filters.</p>
   }
 
   return (
@@ -237,7 +318,7 @@ function ModuleCardGrid({
       {families.map((group) => (
         <section key={group.family} className="grid gap-3">
           <h3 className="text-sm font-medium">{group.family}</h3>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {group.courses.map((course) => (
               <ModuleCard
                 key={course.id}
@@ -376,5 +457,128 @@ function AssignDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function partsLabel(steps: number) {
+  return steps === 1 ? "1 part" : `${steps} parts`
+}
+
+function lengthChoice(length: CourseLength) {
+  switch (length) {
+    case "Short":
+      return "Up to 6 parts"
+    case "Medium":
+      return "7 to 16 parts"
+    case "Long":
+      return "17 parts or more"
+    default: {
+      const unreachable: never = length
+      return unreachable
+    }
+  }
+}
+
+type ListedCourse = CatalogueCourse & {
+  topic: string
+  group: LearningGroup
+  length: CourseLength
+  typeLabel: string
+  parentTitle: string | null
+}
+
+function familyIndex(topic: string) {
+  const index = (courseFamilyOrder as readonly string[]).indexOf(topic)
+  return index === -1 ? 99 : index
+}
+
+function kindRank(kind: string) {
+  if (kind === "course") return 0
+  if (kind === "bite") return 1
+  if (kind === "checkpoint") return 2
+  if (kind === "hub") return 3
+  return 4
+}
+
+function listCatalogue(courses: CatalogueCourse[]): ListedCourse[] {
+  const titleByCode = new Map(courses.flatMap((course) => (course.code ? [[course.code, course.title] as const] : [])))
+  const audienceByCode = new Map(
+    courses.flatMap((course) => (course.code ? [[course.code, course.audience] as const] : []))
+  )
+  const listed = courses.map((course) => ({
+    ...course,
+    topic: courseTopic(course.code, course.parentCode),
+    group: learningGroup(
+      course.audience,
+      course.parentCode ? (audienceByCode.get(course.parentCode) ?? null) : null
+    ),
+    length: courseLengthLabel(course.steps),
+    typeLabel: courseKindLabel(course.kind),
+    parentTitle: course.parentCode ? (titleByCode.get(course.parentCode) ?? null) : null,
+  }))
+  listed.sort((left, right) => {
+    const topicDelta = familyIndex(left.topic) - familyIndex(right.topic)
+    if (topicDelta !== 0) return topicDelta
+    const kindDelta = kindRank(left.kind) - kindRank(right.kind)
+    if (kindDelta !== 0) return kindDelta
+    return left.title.localeCompare(right.title)
+  })
+  return listed
+}
+
+function TopicChip({
+  label,
+  pressed,
+  onClick,
+}: {
+  label: string
+  pressed: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center rounded-md border-0 px-2 py-1 text-xs font-medium shadow-none",
+        pressed
+          ? "bg-[#E6E8EB] text-foreground dark:bg-[#3A3F46] dark:text-foreground"
+          : "bg-[#F1F2F4] text-[#5E6570] hover:bg-[#E6E8EB] dark:bg-[#32363C] dark:text-[#C8CDD4] dark:hover:bg-[#3A3F46]"
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
+function CatalogueFilter({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: Array<string | { value: string; label: string }>
+  onChange: (value: string) => void
+}) {
+  return (
+    <NativeSelect
+      size="sm"
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <NativeSelectOption value="">{label}</NativeSelectOption>
+      {options.map((option) => {
+        const item = typeof option === "string" ? { value: option, label: option } : option
+        return (
+          <NativeSelectOption key={item.value} value={item.value}>
+            {item.label}
+          </NativeSelectOption>
+        )
+      })}
+    </NativeSelect>
   )
 }

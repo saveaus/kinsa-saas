@@ -13,7 +13,7 @@ export default function LoginPage() {
       aside={
         <p>
           New provider?{" "}
-          <Link href="/signup" className="text-foreground underline underline-offset-2">
+          <Link href="/signup" className="text-primary underline underline-offset-2">
             Create an organisation
           </Link>
         </p>

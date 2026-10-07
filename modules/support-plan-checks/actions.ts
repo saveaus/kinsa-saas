@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 
 export type SupportPlanCheckActionState = { error?: string; message?: string }
@@ -31,6 +32,8 @@ export async function createSupportPlanCheckAction(
 ): Promise<SupportPlanCheckActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const intent = String(formData.get("intent") ?? "")
   const note = cleanNote(formData.get("note"))
@@ -161,6 +164,8 @@ export async function acceptSupportPlanCheckAction(
 ): Promise<SupportPlanCheckActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
@@ -200,6 +205,8 @@ export async function deleteSupportPlanCheckDraftAction(
 ): Promise<SupportPlanCheckActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data: existing, error: readError } = await supabase

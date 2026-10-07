@@ -1,5 +1,11 @@
 import { format } from "date-fns"
 
+import {
+  packAreaLabel,
+  packReadiness,
+  packStatusLabel,
+  type PackItem,
+} from "@/modules/audit-pack/score"
 import type { WorkerCompliance } from "@/modules/documents/compliance"
 
 type WorkerRow = {
@@ -9,7 +15,8 @@ type WorkerRow = {
 }
 
 export function organisationCsv(
-  rows: Array<{ worker: WorkerRow; compliance: WorkerCompliance }>
+  rows: Array<{ worker: WorkerRow; compliance: WorkerCompliance }>,
+  pack: PackItem[] = []
 ) {
   const header = ["Worker", "Email", "Status", "Score", "Exceptions"]
   const lines = rows.map(({ worker, compliance }) => {
@@ -27,7 +34,20 @@ export function organisationCsv(
       .map(csvCell)
       .join(",")
   })
-  return [header.join(","), ...lines].join("\n")
+  const readiness = packReadiness(pack)
+  const packLines = pack.map((item) =>
+    [packAreaLabel(item.area), item.label, packStatusLabel(item.status), item.detail]
+      .map(csvCell)
+      .join(",")
+  )
+  return [
+    header.join(","),
+    ...lines,
+    "",
+    `Audit pack,${readiness.met} of ${readiness.total} (${readiness.percent}%)`,
+    "Area,Item,Status,Detail",
+    ...packLines,
+  ].join("\n")
 }
 
 export function workerCsv(input: {

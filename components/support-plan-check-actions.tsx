@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { ActionForm } from "@/components/action-form"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  acceptSupportPlanCheckAction,
-  deleteSupportPlanCheckDraftAction,
-} from "@/modules/support-plan-checks/actions"
 
 export function SupportPlanCheckFileButton({
   checkId,
@@ -70,27 +65,5 @@ export function SupportPlanCheckFileButton({
         </Link>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function SupportPlanCheckDraftActions({ checkId }: { checkId: string }) {
-  return (
-    <div className="flex gap-1">
-      <ActionForm
-        action={acceptSupportPlanCheckAction.bind(null, checkId)}
-        submitLabel="Accept"
-        pendingLabel="Accepting..."
-        submitSize="sm"
-        className="w-fit"
-      />
-      <ActionForm
-        action={deleteSupportPlanCheckDraftAction.bind(null, checkId)}
-        submitLabel="Remove"
-        pendingLabel="Removing..."
-        submitVariant="outline"
-        submitSize="sm"
-        className="w-fit"
-      />
-    </div>
   )
 }

@@ -5,9 +5,12 @@ import { RecordTable, type RecordRow } from "@/components/record-table"
 import { SettingsFrame } from "@/components/settings-frame"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
+import { personName } from "@/lib/person-name"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { reminderCategoryLabel } from "@/modules/reminders/categories"
 import {
+  listFailedDeliveries,
   listRecentDispatches,
   listReminderRules,
 } from "@/modules/reminders/queries"
@@ -19,11 +22,13 @@ export default async function AutomaticEmailsPage({
 }) {
   const { context } = await requireTenant()
   requirePermission(context, "reminders.manage")
+  await requireRegistered(context)
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
-  const [rules, { dispatches, hasMore }] = await Promise.all([
+  const [rules, { dispatches, hasMore }, failures] = await Promise.all([
     listReminderRules(context),
     listRecentDispatches(context, page),
+    listFailedDeliveries(context),
   ])
 
   const rows = [...rules].sort((left, right) => {
@@ -66,7 +71,25 @@ export default async function AutomaticEmailsPage({
           }
         })}
         empty="No follow-ups"
-        emptyDescription="Reminder rules for documents and courses show up here."
+        emptyDescription="Reminder rules for documents show up here."
+      />
+      <RecordTable
+        title="Couldn't send"
+        columns={[
+          { id: "when", label: "When" },
+          { id: "worker", label: "Worker" },
+          { id: "detail", label: "What happened" },
+        ]}
+        rows={failures.map((row) => ({
+          id: row.id,
+          cells: {
+            when: { kind: "text" as const, text: formatDate(row.at) },
+            worker: { kind: "text" as const, text: row.workerName },
+            detail: { kind: "text" as const, text: row.detail },
+          },
+        }))}
+        empty="No failed emails"
+        emptyDescription="A reminder or invite that does not send shows up here."
       />
       <div className="grid gap-3">
         <RecordTable
@@ -96,7 +119,7 @@ export default async function AutomaticEmailsPage({
                 sent: { kind: "text", text: formatDate(row.sent_at) },
                 worker: {
                   kind: "text",
-                  text: `${worker.first_name} ${worker.last_name} · ${worker.email}`,
+                  text: `${personName(worker.first_name, worker.last_name)} · ${worker.email}`,
                 },
                 rule: {
                   kind: "text",

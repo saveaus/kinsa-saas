@@ -1,14 +1,16 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { getLogEntry, getLogRegister } from "@/modules/logs/queries"
 
 export async function LogFilePage({ slug, id }: { slug: string; id: string }) {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const entry = await getLogEntry(context, id)
   if (!entry) notFound()
   const register = await getLogRegister(context, entry.register_id)
@@ -28,12 +30,7 @@ export async function LogFilePage({ slug, id }: { slug: string; id: string }) {
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <Link
-          href={`/logs/${register.slug}`}
-          className="w-fit text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to {register.name.toLowerCase()}
-        </Link>
+        <BackLink href="/reports" />
         <h1 className="font-heading text-lg">{entry.summary}</h1>
         <p className="text-sm text-muted-foreground">
           {entry.original_filename} · {formatDate(entry.occurred_on)}

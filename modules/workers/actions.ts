@@ -3,14 +3,17 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { personName } from "@/lib/person-name"
 import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { requestAppUrl } from "@/lib/request-app-url"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
+import { syncSubscriptionSeats } from "@/modules/billing/stripe"
 import { createInviteToken, hashToken } from "@/modules/identity/token"
 import { sendInviteEmail } from "@/modules/reminders/email"
+import { listTeamCodes } from "@/modules/teams/queries"
 import { parseStaffRoles } from "@/modules/workforce/roles"
 
 export type WorkerActionState = {
@@ -32,12 +35,15 @@ export async function createWorkerAction(
     .trim()
     .toLowerCase()
 
-  const staffRoles = parseStaffRoles(formData)
+  const allowed = await listTeamCodes(context)
+  const staffRoles = parseStaffRoles(formData).filter((role) =>
+    allowed.has(role)
+  )
   if (!firstName || !lastName || !email) {
     return { error: "First name, last name and email are required." }
   }
   if (staffRoles.length === 0) {
-    return { error: "Choose at least one role." }
+    return { error: "Choose at least one team." }
   }
 
   const supabase = await createServerSupabase()
@@ -56,6 +62,7 @@ export async function createWorkerAction(
   if (error) return { error: error.message }
 
   await recordAudit("worker.created", "worker", data.id, { email })
+  await syncSubscriptionSeats(context.organisationId)
   revalidatePath("/workers")
   revalidateCompliance()
   redirect(`/workers/${data.id}`)
@@ -69,9 +76,12 @@ export async function updateWorkerAction(
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
 
-  const staffRoles = parseStaffRoles(formData)
+  const allowed = await listTeamCodes(context)
+  const staffRoles = parseStaffRoles(formData).filter((role) =>
+    allowed.has(role)
+  )
   if (staffRoles.length === 0) {
-    return { error: "Choose at least one role." }
+    return { error: "Choose at least one team." }
   }
 
   const supabase = await createServerSupabase()
@@ -95,6 +105,7 @@ export async function updateWorkerAction(
   if (error) return { error: error.message }
 
   await recordAudit("worker.updated", "worker", workerId, {})
+  await syncSubscriptionSeats(context.organisationId)
   revalidatePath("/workers")
   revalidatePath(`/workers/${workerId}`)
   revalidateCompliance()
@@ -155,6 +166,7 @@ export async function deleteWorkerAction(
 
   await supabase.rpc("anonymize_worker_audit", { p_worker_id: workerId })
   await recordAudit("worker.deleted", "worker", workerId, { anonymized: true })
+  await syncSubscriptionSeats(context.organisationId)
 
   revalidatePath("/workers")
   revalidateCompliance()
@@ -198,7 +210,7 @@ export async function inviteWorkerAction(
   const inviteUrl = `${await requestAppUrl()}/invite/${token}`
   const delivery = await sendInviteEmail({
     to: worker.email,
-    workerName: `${worker.first_name} ${worker.last_name}`,
+    workerName: personName(worker.first_name, worker.last_name),
     organisationName: context.organisationName,
     inviteUrl,
   })

@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react"
 import { useRouter } from "next/navigation"
 
+import { CourseSearchSelect } from "@/components/course-search-select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { assignCoursesAction } from "@/modules/training/actions"
 
 export function AssignSelfCourses({
@@ -67,13 +67,14 @@ function AssignSelfDialog({
   onOpenChange: (open: boolean) => void
   onAssigned: () => void
 }) {
-  const [query, setQuery] = useState("")
   const [picked, setPicked] = useState<string[]>([])
   const [state, action, pending] = useActionState(assignCoursesAction, {})
-  const needle = query.trim().toLowerCase()
-  const shown = courses.filter((course) => course.title.toLowerCase().includes(needle))
   const assignLabel =
-    picked.length === 1 ? "Assign 1 course" : picked.length > 1 ? `Assign ${picked.length} courses` : "Assign"
+    picked.length === 1
+      ? "Assign 1 course"
+      : picked.length > 1
+        ? `Assign ${picked.length} courses`
+        : "Assign"
 
   return (
     <Dialog
@@ -100,56 +101,31 @@ function AssignSelfDialog({
           <>
             <DialogHeader>
               <DialogTitle>Assign to me</DialogTitle>
-              <DialogDescription>Choose courses to add to My courses.</DialogDescription>
+              <DialogDescription>
+                Choose courses to add to My courses.
+              </DialogDescription>
             </DialogHeader>
             <form action={action} className="grid gap-3">
               <input type="hidden" name="worker_id" value={workerId} />
               {picked.map((courseId) => (
-                <input key={courseId} type="hidden" name="course_id" value={courseId} />
+                <input
+                  key={courseId}
+                  type="hidden"
+                  name="course_id"
+                  value={courseId}
+                />
               ))}
               {state.error ? (
                 <Alert variant="destructive">
                   <AlertDescription>{state.error}</AlertDescription>
                 </Alert>
               ) : null}
-              {courses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Every course is already on your list.</p>
-              ) : (
-                <>
-                  <Input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search courses"
-                    aria-label="Search courses"
-                  />
-                  <div className="grid max-h-64 gap-1 overflow-y-auto">
-                    {shown.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No courses match that search.</p>
-                    ) : (
-                      shown.map((course) => (
-                        <label
-                          key={course.id}
-                          className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm hover:bg-muted"
-                        >
-                          <input
-                            type="checkbox"
-                            className="size-4"
-                            checked={picked.includes(course.id)}
-                            onChange={(event) =>
-                              setPicked((current) =>
-                                event.target.checked
-                                  ? [...current, course.id]
-                                  : current.filter((id) => id !== course.id)
-                              )
-                            }
-                          />
-                          {course.title}
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
+              <CourseSearchSelect
+                courses={courses}
+                picked={picked}
+                onPickedChange={setPicked}
+                emptyLabel="Every course is already on your list."
+              />
               <DialogFooter>
                 <Button type="submit" disabled={pending || picked.length === 0}>
                   {pending ? "Assigning..." : assignLabel}

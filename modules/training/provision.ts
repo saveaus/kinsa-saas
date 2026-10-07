@@ -26,7 +26,6 @@ const catalogue = [
   ...(catalogueJson as CatalogueItem[]),
   ...(registrationCourses as unknown as CatalogueItem[]),
 ]
-const readyOrganisations = new Set<string>()
 
 function asKind(kind: string): CatalogueKind {
   if (
@@ -40,8 +39,6 @@ function asKind(kind: string): CatalogueKind {
 }
 
 export async function ensureTrainingLibrary(organisationId: string) {
-  if (readyOrganisations.has(organisationId)) return
-
   const admin = createAdminSupabase()
   const { data: existing, error: existingError } = await admin
     .from("courses")
@@ -164,5 +161,63 @@ export async function ensureTrainingLibrary(organisationId: string) {
     if (error) throw new Error(error.message)
   }
 
-  readyOrganisations.add(organisationId)
+  await syncPlatformLessons(organisationId, byCode)
+}
+
+function lessonNeedsRefresh(content: Json | null) {
+  const text = JSON.stringify(content ?? "")
+  return (
+    text.includes("In this part") ||
+    text.includes("guarantee an audit") ||
+    text.includes("Your score is saved on your worker record") ||
+    text.includes("This five-minute refresher is a short recap") ||
+    text.includes("NDIS Audit Readiness")
+  )
+}
+
+async function syncPlatformLessons(
+  organisationId: string,
+  byCode: Map<string, string>
+) {
+  const admin = createAdminSupabase()
+  const specByCode = new Map(catalogue.map((item) => [item.code, item]))
+
+  const { data: courseRows, error: courseRowError } = await admin
+    .from("courses")
+    .select("id, code, title, description")
+    .eq("organisation_id", organisationId)
+  if (courseRowError) throw new Error(courseRowError.message)
+
+  for (const row of courseRows ?? []) {
+    if (!row.code) continue
+    const spec = specByCode.get(row.code)
+    if (!spec) continue
+    if (row.title === spec.title && row.description === spec.description) continue
+    const { error } = await admin
+      .from("courses")
+      .update({ title: spec.title, description: spec.description })
+      .eq("id", row.id)
+    if (error) throw new Error(error.message)
+  }
+
+  const { data: storedModules, error: storedError } = await admin
+    .from("course_modules")
+    .select("id, course_id, content")
+    .eq("organisation_id", organisationId)
+  if (storedError) throw new Error(storedError.message)
+
+  const idToCode = new Map(
+    [...byCode.entries()].map(([code, id]) => [id, code] as const)
+  )
+  for (const row of storedModules ?? []) {
+    if (!lessonNeedsRefresh(row.content)) continue
+    const code = idToCode.get(row.course_id)
+    const spec = code ? specByCode.get(code) : undefined
+    if (!spec) continue
+    const { error } = await admin
+      .from("course_modules")
+      .update({ content: spec.lesson })
+      .eq("id", row.id)
+    if (error) throw new Error(error.message)
+  }
 }

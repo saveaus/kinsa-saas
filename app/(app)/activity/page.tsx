@@ -5,7 +5,11 @@ import { RecordTable, type RecordRow } from "@/components/record-table"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDateTime } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { formatActivityDay, parseDayKey } from "@/modules/audit/activity-calendar"
+import { requireRegistered } from "@/modules/billing/guard"
+import {
+  formatActivityDay,
+  parseDayKey,
+} from "@/modules/audit/activity-calendar"
 import {
   listAllAuditEvents,
   listAuditDailyCounts,
@@ -17,14 +21,23 @@ import { auditSentence } from "@/modules/audit/sentence"
 export default async function ActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; actor?: string; day?: string; from?: string; to?: string; all?: string }>
+  searchParams: Promise<{
+    page?: string
+    actor?: string
+    day?: string
+    from?: string
+    to?: string
+    all?: string
+  }>
 }) {
   const { context } = await requireTenant()
   requirePermission(context, "audit.read")
+  await requireRegistered(context)
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const showAll = params.all === "1"
-  const selectedDay = params.day && parseDayKey(params.day) ? params.day : undefined
+  const selectedDay =
+    params.day && parseDayKey(params.day) ? params.day : undefined
   const filters: AuditFilters = {
     actor: params.actor || undefined,
     day: selectedDay,
@@ -33,13 +46,18 @@ export default async function ActivityPage({
   }
 
   const [listResult, counts] = await Promise.all([
-    showAll ? listAllAuditEvents(context, filters) : listAuditEvents(context, filters, page),
+    showAll
+      ? listAllAuditEvents(context, filters)
+      : listAuditEvents(context, filters, page),
     listAuditDailyCounts(context, { actor: filters.actor }),
   ])
 
   const events = listResult.events
-  const hasMore = showAll ? false : "hasMore" in listResult && listResult.hasMore
-  const truncated = showAll && "truncated" in listResult ? listResult.truncated : false
+  const hasMore = showAll
+    ? false
+    : "hasMore" in listResult && listResult.hasMore
+  const truncated =
+    showAll && "truncated" in listResult ? listResult.truncated : false
 
   const rows: RecordRow[] = events.map((event) => {
     const role = event.actor_role ?? "system"
@@ -47,7 +65,10 @@ export default async function ActivityPage({
       id: event.id,
       cells: {
         when: { kind: "text", text: formatDateTime(event.created_at) },
-        event: { kind: "text", text: `${event.actorName} ${auditSentence(event.action, event.target_type)}` },
+        event: {
+          kind: "text",
+          text: `${event.actorName} ${auditSentence(event.action, event.target_type, "org", event.metadata)}`,
+        },
         actor: {
           kind: "chip",
           text: event.actorName,
@@ -81,26 +102,42 @@ export default async function ActivityPage({
   if (!selectedDay && filters.to) exportQuery.set("to", filters.to)
   const exportHref = `/api/export/activity${exportQuery.toString() ? `?${exportQuery}` : ""}`
 
-  const logTitle = selectedDay ? `Log · ${formatActivityDay(selectedDay)}` : "Activity log"
+  const logTitle = selectedDay
+    ? `Activity · ${formatActivityDay(selectedDay)}`
+    : "Activity"
 
   return (
     <div className="grid gap-4">
-      <ActivityHeatmap counts={counts} actor={filters.actor} selectedDay={selectedDay} showAll={showAll} />
+      <ActivityHeatmap
+        counts={counts}
+        actor={filters.actor}
+        selectedDay={selectedDay}
+        showAll={showAll}
+      />
       <RecordTable
         title={logTitle}
         actions={
           <div className="flex flex-wrap gap-1">
             {showAll ? (
-              <Link href={hrefWith({ all: null, page: null })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Link
+                href={hrefWith({ all: null, page: null })}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
                 Paginate
               </Link>
             ) : (
-              <Link href={hrefWith({ all: "1", page: null })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Link
+                href={hrefWith({ all: "1", page: null })}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
                 Show all
               </Link>
             )}
             {selectedDay ? (
-              <Link href={hrefWith({ day: null, page: null })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Link
+                href={hrefWith({ day: null, page: null })}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
                 All days
               </Link>
             ) : null}
@@ -117,11 +154,15 @@ export default async function ActivityPage({
         rows={rows}
         empty={selectedDay ? "No activity on this day" : "No activity yet"}
         emptyDescription={
-          selectedDay ? "Pick another day, or view every day." : "Changes across the organisation show up here."
+          selectedDay
+            ? "Pick another day, or view every day."
+            : "Changes across the organisation show up here."
         }
       />
       {truncated ? (
-        <p className="text-xs text-muted-foreground">Showing the latest 5,000 events. Export CSV for the same window.</p>
+        <p className="text-xs text-muted-foreground">
+          Showing the latest 5,000 events. Export CSV for the same window.
+        </p>
       ) : null}
       {!showAll && (page > 1 || hasMore) ? (
         <div className="flex justify-end gap-2">
@@ -134,7 +175,10 @@ export default async function ActivityPage({
             </Link>
           ) : null}
           {hasMore ? (
-            <Link href={hrefWith({ page: String(page + 1) })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Link
+              href={hrefWith({ page: String(page + 1) })}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
               Older
             </Link>
           ) : null}

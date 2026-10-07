@@ -1,15 +1,15 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { getIncident } from "@/modules/incidents/queries"
 import { listLogRegisters } from "@/modules/logs/queries"
 import { logShown } from "@/modules/logs/standing"
 import {
   incidentListPath,
-  incidentRegisterTitle,
   type IncidentKind,
 } from "@/modules/incidents/standing"
 
@@ -22,6 +22,7 @@ export async function IncidentFilePage({
 }) {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const incident = await getIncident(context, id)
   if (!incident || incident.kind !== kind) notFound()
   const logs = await listLogRegisters(context)
@@ -33,12 +34,7 @@ export async function IncidentFilePage({
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <Link
-          href={incidentListPath(incident.kind)}
-          className="w-fit text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to {incidentRegisterTitle(incident.kind).toLowerCase()}
-        </Link>
+        <BackLink href={incidentListPath(incident.kind)} />
         <h1 className="font-heading text-lg">{incident.summary}</h1>
         <p className="text-sm text-muted-foreground">
           {incident.original_filename} · {formatDate(incident.occurred_on)}

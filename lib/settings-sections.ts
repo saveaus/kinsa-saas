@@ -24,37 +24,37 @@ export const settingsSections: SettingsSection[] = [
     group: "Organisation",
     audience: "admin",
     description:
-      "Business name, ABN, NDIS registration number, registration groups, and logo for certificates.",
+      "Business name, ABN, NDIS registration number, registration groups, and logo.",
   },
   {
-    href: "/settings/courses",
-    label: "Courses",
+    href: "/settings/roles",
+    label: "Roles and permissions",
     group: "Organisation",
     audience: "admin",
-    description:
-      "Pass marks, renewals, and which roles must complete each course.",
+    description: "Create teams and choose what each one can do.",
   },
   {
     href: "/settings/credentials",
     label: "Credentials",
     group: "Organisation",
     audience: "admin",
-    description: "Which documents each role must hold.",
+    description:
+      "Choose a team, then turn on the documents that team must hold.",
   },
   {
-    href: "/settings/logs",
-    label: "Logs",
+    href: "/settings/billing",
+    label: "Billing",
     group: "Organisation",
     audience: "admin",
     description:
-      "Show, hide, and add logs for the organisation or for one person.",
+      "Update your payment information or switch plans according to your needs.",
   },
   {
     href: "/settings/emails",
     label: "Automatic emails",
     group: "Notifications",
     audience: "admin",
-    description: "Follow-up emails for documents and courses.",
+    description: "Follow-up emails for documents.",
   },
 ]
 

@@ -2,10 +2,8 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import { lessonPercent } from "@/modules/training/display"
 import { libraryStepCount } from "@/modules/training/library"
-import { ensureTrainingLibrary } from "@/modules/training/provision"
 
 export async function listCourses(context: TenantContext) {
-  await ensureTrainingLibrary(context.organisationId)
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from("courses")

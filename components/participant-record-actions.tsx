@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { ActionForm } from "@/components/action-form"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  acceptParticipantRecordAction,
-  deleteParticipantRecordDraftAction,
-} from "@/modules/participants/actions"
 
 export function ParticipantFileButton({
   participantId,
@@ -70,27 +65,5 @@ export function ParticipantFileButton({
         </Link>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function ParticipantDraftActions({ recordId }: { recordId: string }) {
-  return (
-    <div className="flex gap-1">
-      <ActionForm
-        action={acceptParticipantRecordAction.bind(null, recordId)}
-        submitLabel="Accept"
-        pendingLabel="Accepting..."
-        submitSize="sm"
-        className="w-fit"
-      />
-      <ActionForm
-        action={deleteParticipantRecordDraftAction.bind(null, recordId)}
-        submitLabel="Remove"
-        pendingLabel="Removing..."
-        submitVariant="outline"
-        submitSize="sm"
-        className="w-fit"
-      />
-    </div>
   )
 }

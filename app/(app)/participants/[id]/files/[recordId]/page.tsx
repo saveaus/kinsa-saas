@@ -1,9 +1,10 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import {
   getParticipant,
   getParticipantFile,
@@ -36,6 +37,7 @@ export default async function ParticipantFilePage({
   const { id, recordId } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const [participant, file] = await Promise.all([
     getParticipant(context, id),
     getParticipantFile(context, recordId),
@@ -48,12 +50,7 @@ export default async function ParticipantFilePage({
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <Link
-          href={`/participants/${participant.id}`}
-          className="w-fit text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to {participant.name}
-        </Link>
+        <BackLink href={`/participants/${participant.id}`} />
         <h1 className="font-heading text-lg">{file.original_filename}</h1>
         <p className="text-sm text-muted-foreground">
           {fileDetail(file.kind, file.starts_on, file.ends_on, file.review_on)}

@@ -1,4 +1,5 @@
 import type { RecordRow } from "@/components/record-table"
+import { personName } from "@/lib/person-name"
 import { expiryLabel } from "@/lib/expiry-label"
 import type { ComplianceItem } from "@/modules/documents/compliance"
 
@@ -65,7 +66,7 @@ export function attentionRows(
       .map((item) => {
         const href =
           item.kind === "course"
-            ? `/courses/${item.key.slice("course:".length)}`
+            ? `/workers/${worker.id}`
             : item.status === "pending"
               ? "/approvals"
               : `/workers/${worker.id}#upload`
@@ -76,7 +77,7 @@ export function attentionRows(
           cells: {
             worker: {
               kind: "link",
-              text: `${worker.first_name} ${worker.last_name}`,
+              text: personName(worker.first_name, worker.last_name),
               href: `/workers/${worker.id}`,
             },
             item: { kind: "link", text: item.label, href },

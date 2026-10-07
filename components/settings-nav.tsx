@@ -4,10 +4,10 @@ import {
   BadgeCheck,
   Building2,
   ChevronRight,
-  ClipboardList,
-  GraduationCap,
+  CreditCard,
   KeyRound,
   Mail,
+  Shield,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -26,9 +26,9 @@ const storageKey = "kinsa-settings-groups"
 const sectionIcons: Record<string, LucideIcon> = {
   "/settings/password": KeyRound,
   "/settings/general": Building2,
-  "/settings/courses": GraduationCap,
+  "/settings/roles": Shield,
   "/settings/credentials": BadgeCheck,
-  "/settings/logs": ClipboardList,
+  "/settings/billing": CreditCard,
   "/settings/emails": Mail,
 }
 

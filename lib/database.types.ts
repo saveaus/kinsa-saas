@@ -46,6 +46,18 @@ export type Database = {
           abn: string | null
           registration_number: string | null
           registration_groups: string[]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          billing_plan: "staff" | "registered" | null
+          billing_status:
+            | "trialing"
+            | "active"
+            | "past_due"
+            | "canceled"
+            | "incomplete"
+            | "paused"
+            | null
+          trial_ends_at: string | null
           created_at: string
           updated_at: string
         }
@@ -56,6 +68,18 @@ export type Database = {
           abn?: string | null
           registration_number?: string | null
           registration_groups?: string[]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          billing_plan?: "staff" | "registered" | null
+          billing_status?:
+            | "trialing"
+            | "active"
+            | "past_due"
+            | "canceled"
+            | "incomplete"
+            | "paused"
+            | null
+          trial_ends_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -65,6 +89,18 @@ export type Database = {
           abn?: string | null
           registration_number?: string | null
           registration_groups?: string[]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          billing_plan?: "staff" | "registered" | null
+          billing_status?:
+            | "trialing"
+            | "active"
+            | "past_due"
+            | "canceled"
+            | "incomplete"
+            | "paused"
+            | null
+          trial_ends_at?: string | null
         }
         Relationships: []
       }
@@ -78,6 +114,123 @@ export type Database = {
         }
         Insert: { id: string; email: string; full_name?: string | null }
         Update: { email?: string; full_name?: string | null }
+        Relationships: []
+      }
+      assistant_chats: {
+        Row: {
+          id: string
+          organisation_id: string
+          user_id: string
+          title: string
+          messages: Json
+          created_at: string
+          updated_at: string
+          archived_at: string | null
+          assignment_id: string | null
+          purpose: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          user_id: string
+          title: string
+          messages?: Json
+          created_at?: string
+          updated_at?: string
+          archived_at?: string | null
+          assignment_id?: string | null
+          purpose?: string
+        }
+        Update: {
+          title?: string
+          messages?: Json
+          archived_at?: string | null
+          assignment_id?: string | null
+          purpose?: string
+        }
+        Relationships: []
+      }
+      assistant_usage: {
+        Row: {
+          organisation_id: string
+          tokens_used: number
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          tokens_used?: number
+          updated_at?: string
+        }
+        Update: {
+          tokens_used?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      internal_audits: {
+        Row: {
+          id: string
+          organisation_id: string
+          title: string
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          title: string
+          created_by: string
+          created_at?: string
+        }
+        Update: { title?: string }
+        Relationships: []
+      }
+      internal_audit_assignments: {
+        Row: {
+          id: string
+          organisation_id: string
+          audit_id: string
+          standard_code: string
+          user_id: string
+          assigned_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          audit_id: string
+          standard_code: string
+          user_id: string
+          assigned_by: string
+          created_at?: string
+        }
+        Update: { standard_code?: string }
+        Relationships: []
+      }
+      internal_audit_assessments: {
+        Row: {
+          assignment_id: string
+          organisation_id: string
+          rating: string
+          source: string
+          summary: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          assignment_id: string
+          organisation_id: string
+          rating: string
+          source: string
+          summary?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          rating?: string
+          source?: string
+          summary?: string | null
+        }
         Relationships: []
       }
       memberships: {
@@ -98,6 +251,33 @@ export type Database = {
         Update: { permission?: AppPermission }
         Relationships: []
       }
+      teams: {
+        Row: {
+          id: string
+          organisation_id: string
+          name: string
+          code: string
+          built_in: boolean
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          organisation_id: string
+          name: string
+          code: string
+          built_in?: boolean
+          position?: number
+        }
+        Update: { name?: string; position?: number }
+        Relationships: []
+      }
+      team_permissions: {
+        Row: { team_id: string; permission: AppPermission }
+        Insert: { team_id: string; permission: AppPermission }
+        Update: { permission?: AppPermission }
+        Relationships: []
+      }
       workers: {
         Row: {
           id: string
@@ -107,7 +287,7 @@ export type Database = {
           last_name: string
           email: string
           employment_status: WorkerEmploymentStatus
-          staff_roles: StaffRole[]
+          staff_roles: string[]
           deleted_at: string | null
           created_at: string
           updated_at: string
@@ -119,14 +299,14 @@ export type Database = {
           last_name: string
           email: string
           employment_status?: WorkerEmploymentStatus
-          staff_roles?: StaffRole[]
+          staff_roles?: string[]
         }
         Update: {
           first_name?: string
           last_name?: string
           email?: string
           employment_status?: WorkerEmploymentStatus
-          staff_roles?: StaffRole[]
+          staff_roles?: string[]
           user_id?: string | null
           deleted_at?: string | null
         }
@@ -178,6 +358,7 @@ export type Database = {
           file_size_bytes: number
           expires_on: string | null
           approval_status: DocumentApprovalStatus
+          flagged: boolean
           review_note: string | null
           reviewed_by: string | null
           reviewed_at: string | null
@@ -199,6 +380,7 @@ export type Database = {
         }
         Update: {
           approval_status?: DocumentApprovalStatus
+          flagged?: boolean
           review_note?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -213,10 +395,11 @@ export type Database = {
           standard_code: string
           review_on: string
           status: PolicyRecordStatus
-          storage_path: string
-          original_filename: string
-          mime_type: string
-          file_size_bytes: number
+          body: string | null
+          storage_path: string | null
+          original_filename: string | null
+          mime_type: string | null
+          file_size_bytes: number | null
           drafted_by: PolicyDrafter
           created_by: string | null
           accepted_by: string | null
@@ -231,10 +414,11 @@ export type Database = {
           standard_code: string
           review_on: string
           status?: PolicyRecordStatus
-          storage_path: string
-          original_filename: string
-          mime_type: string
-          file_size_bytes: number
+          body?: string | null
+          storage_path?: string | null
+          original_filename?: string | null
+          mime_type?: string | null
+          file_size_bytes?: number | null
           drafted_by?: PolicyDrafter
           created_by?: string | null
           accepted_by?: string | null
@@ -244,6 +428,26 @@ export type Database = {
           status?: PolicyRecordStatus
           accepted_by?: string | null
           accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      policy_acknowledgements: {
+        Row: {
+          id: string
+          organisation_id: string
+          policy_id: string
+          user_id: string
+          acknowledged_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          policy_id: string
+          user_id: string
+          acknowledged_at?: string
+        }
+        Update: {
+          acknowledged_at?: string
         }
         Relationships: []
       }
@@ -421,6 +625,10 @@ export type Database = {
           participant_id: string | null
           worker_id: string | null
           built_in: string | null
+          emoji: string
+          evidence_area: string | null
+          date_fields: Json
+          template_key: string | null
           created_at: string
           updated_at: string
         }
@@ -435,6 +643,10 @@ export type Database = {
           participant_id?: string | null
           worker_id?: string | null
           built_in?: string | null
+          emoji?: string
+          evidence_area?: string | null
+          date_fields?: Json
+          template_key?: string | null
         }
         Update: {
           name?: string
@@ -442,6 +654,31 @@ export type Database = {
           visible?: boolean
           scope?: string
           subject?: string
+          participant_id?: string | null
+          worker_id?: string | null
+          emoji?: string
+          evidence_area?: string | null
+          date_fields?: Json
+          template_key?: string | null
+        }
+        Relationships: []
+      }
+      log_register_assignees: {
+        Row: {
+          id: string
+          organisation_id: string
+          register_id: string
+          participant_id: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          register_id: string
+          participant_id?: string | null
+          worker_id?: string | null
+        }
+        Update: {
           participant_id?: string | null
           worker_id?: string | null
         }
@@ -490,6 +727,73 @@ export type Database = {
           status?: IncidentStatus
           accepted_by?: string | null
           accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      log_entry_people: {
+        Row: {
+          id: string
+          organisation_id: string
+          entry_id: string
+          participant_id: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          entry_id: string
+          participant_id?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          participant_id?: string | null
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
+      log_entry_files: {
+        Row: {
+          id: string
+          organisation_id: string
+          entry_id: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          entry_id: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          file_size_bytes: number
+        }
+        Update: {
+          original_filename?: string
+        }
+        Relationships: []
+      }
+      log_entry_dates: {
+        Row: {
+          id: string
+          organisation_id: string
+          entry_id: string
+          field_id: string
+          label: string
+          occurred_on: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          entry_id: string
+          field_id: string
+          label: string
+          occurred_on: string
+        }
+        Update: {
+          occurred_on?: string
         }
         Relationships: []
       }
@@ -646,28 +950,28 @@ export type Database = {
         Row: {
           organisation_id: string
           course_id: string
-          staff_role: StaffRole
+          staff_role: string
         }
         Insert: {
           organisation_id: string
           course_id: string
-          staff_role: StaffRole
+          staff_role: string
         }
-        Update: { staff_role?: StaffRole }
+        Update: { staff_role?: string }
         Relationships: []
       }
       document_role_requirements: {
         Row: {
           organisation_id: string
           document_type_version_id: string
-          staff_role: StaffRole
+          staff_role: string
         }
         Insert: {
           organisation_id: string
           document_type_version_id: string
-          staff_role: StaffRole
+          staff_role: string
         }
-        Update: { staff_role?: StaffRole }
+        Update: { staff_role?: string }
         Relationships: []
       }
       reminder_rules: {
@@ -811,6 +1115,10 @@ export type Database = {
       }
       anonymize_worker_audit: {
         Args: { p_worker_id: string }
+        Returns: undefined
+      }
+      record_assistant_tokens: {
+        Args: { p_organisation_id: string; p_tokens: number }
         Returns: undefined
       }
     }

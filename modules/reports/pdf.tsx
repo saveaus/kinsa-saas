@@ -1,6 +1,12 @@
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer"
 import { format } from "date-fns"
 
+import {
+  packAreaLabel,
+  packReadiness,
+  packStatusLabel,
+  type PackItem,
+} from "@/modules/audit-pack/score"
 import type { WorkerCompliance } from "@/modules/documents/compliance"
 
 const styles = StyleSheet.create({
@@ -36,12 +42,32 @@ function EvidenceHeader({ organisationName, subtitle }: { organisationName: stri
 
 export async function organisationPdf(
   organisationName: string,
-  rows: Array<{ worker: WorkerRow; compliance: WorkerCompliance }>
+  rows: Array<{ worker: WorkerRow; compliance: WorkerCompliance }>,
+  pack: PackItem[] = []
 ) {
+  const readiness = packReadiness(pack)
   return renderToBuffer(
     <Document title="Compliance evidence">
       <Page size="A4" style={styles.page}>
         <EvidenceHeader organisationName={organisationName} subtitle="Organisation pack" />
+        <Text style={styles.heading}>
+          Audit pack {readiness.met} of {readiness.total} ({readiness.percent}%)
+        </Text>
+        <View style={styles.tableHeader}>
+          <Text style={styles.col}>Area</Text>
+          <Text style={{ flex: 2 }}>Item</Text>
+          <Text style={styles.col}>Status</Text>
+          <Text style={{ flex: 2 }}>Detail</Text>
+        </View>
+        {pack.map((item) => (
+          <View key={item.key} style={styles.tableRow} wrap={false}>
+            <Text style={styles.col}>{packAreaLabel(item.area)}</Text>
+            <Text style={{ flex: 2 }}>{item.label}</Text>
+            <Text style={styles.col}>{packStatusLabel(item.status)}</Text>
+            <Text style={{ flex: 2 }}>{item.detail}</Text>
+          </View>
+        ))}
+        <Text style={styles.heading}>Workforce</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.col}>Worker</Text>
           <Text style={styles.col}>Status</Text>

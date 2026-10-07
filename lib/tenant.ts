@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation"
 
 import type { AppPermission, AppRole } from "@/lib/database.types"
-import { asRegistrationGroups, type NdisRegistrationGroupCode } from "@/lib/ndis-registration-groups"
+import {
+  asRegistrationGroups,
+  type NdisRegistrationGroupCode,
+} from "@/lib/ndis-registration-groups"
 import { createServerSupabase } from "@/lib/supabase/server"
 
 export type TenantContext = {
@@ -55,17 +58,33 @@ export async function getTenantContext(): Promise<TenantContext | null> {
     return null
   }
 
-  const [{ data: permissionRows }, { data: worker }, { data: profile }, { data: organisation }] =
-    await Promise.all([
-      supabase.from("role_permissions").select("permission").eq("role", membership.role),
-      supabase.from("workers").select("id").eq("user_id", user.id).is("deleted_at", null).maybeSingle(),
-      supabase.from("users").select("full_name, email").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("organisations")
-        .select("name, logo_path, abn, registration_number, registration_groups")
-        .eq("id", membership.organisation_id)
-        .maybeSingle(),
-    ])
+  const [
+    { data: permissionRows },
+    { data: worker },
+    { data: profile },
+    { data: organisation },
+  ] = await Promise.all([
+    supabase
+      .from("role_permissions")
+      .select("permission")
+      .eq("role", membership.role),
+    supabase
+      .from("workers")
+      .select("id, staff_roles")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase
+      .from("users")
+      .select("full_name, email")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("organisations")
+      .select("name, logo_path, abn, registration_number, registration_groups")
+      .eq("id", membership.organisation_id)
+      .maybeSingle(),
+  ])
 
   let organisationLogoUrl: string | null = null
   if (organisation?.logo_path) {
@@ -73,6 +92,27 @@ export async function getTenantContext(): Promise<TenantContext | null> {
       .from("organisation-logos")
       .createSignedUrl(organisation.logo_path, 60 * 60)
     organisationLogoUrl = signed?.signedUrl ?? null
+  }
+
+  let permissions = (permissionRows ?? []).map((row) => row.permission)
+  if (membership.role === "worker" && worker?.staff_roles?.length) {
+    const { data: teamRows, error: teamError } = await supabase
+      .from("teams")
+      .select("id")
+      .eq("organisation_id", membership.organisation_id)
+      .in("code", worker.staff_roles)
+    if (!teamError && teamRows && teamRows.length > 0) {
+      const { data: grants, error: grantError } = await supabase
+        .from("team_permissions")
+        .select("permission")
+        .in(
+          "team_id",
+          teamRows.map((row) => row.id)
+        )
+      if (!grantError) {
+        permissions = [...new Set((grants ?? []).map((row) => row.permission))]
+      }
+    }
   }
 
   return {
@@ -84,9 +124,11 @@ export async function getTenantContext(): Promise<TenantContext | null> {
     organisationLogoUrl,
     organisationAbn: organisation?.abn ?? null,
     organisationRegistrationNumber: organisation?.registration_number ?? null,
-    organisationRegistrationGroups: asRegistrationGroups(organisation?.registration_groups),
+    organisationRegistrationGroups: asRegistrationGroups(
+      organisation?.registration_groups
+    ),
     role: membership.role,
-    permissions: (permissionRows ?? []).map((row) => row.permission),
+    permissions,
     workerId: worker?.id ?? null,
   }
 }
@@ -100,7 +142,10 @@ export async function requireTenant() {
   return { user, context }
 }
 
-export function requirePermission(context: TenantContext, permission: AppPermission) {
+export function requirePermission(
+  context: TenantContext,
+  permission: AppPermission
+) {
   if (!context.permissions.includes(permission)) {
     redirect("/me")
   }

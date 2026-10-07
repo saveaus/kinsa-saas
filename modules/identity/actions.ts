@@ -10,7 +10,6 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import { requireAuthUser } from "@/lib/tenant"
 import { hashToken } from "@/modules/identity/token"
 import { peekInvite } from "@/modules/identity/queries"
-import { ensureTrainingLibrary } from "@/modules/training/provision"
 
 export type AuthActionState = { error?: string; message?: string }
 
@@ -157,12 +156,6 @@ export async function createOrganisationAction(
   )
   if (error || !organisationId) {
     return { error: error?.message ?? "Could not create the organisation." }
-  }
-
-  try {
-    await ensureTrainingLibrary(organisationId)
-  } catch (libraryError) {
-    console.error("training library", libraryError)
   }
 
   redirect("/dashboard")

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { requireTenant } from "@/lib/tenant"
 import { uploadDocumentAction } from "@/modules/documents/actions"
+import { documentReviewLabel, documentReviewTone } from "@/modules/documents/assist-decision"
 import { listDocumentsForWorker, listEnabledTypes } from "@/modules/documents/queries"
 
 export default async function MyDocumentsPage() {
@@ -35,13 +36,8 @@ export default async function MyDocumentsPage() {
               type: { kind: "text", text: type.name },
               status: {
                 kind: "chip",
-                text: doc.approval_status,
-                tone:
-                  doc.approval_status === "approved"
-                    ? "green"
-                    : doc.approval_status === "rejected"
-                      ? "red"
-                      : "orange",
+                text: documentReviewLabel(doc.approval_status, doc.flagged),
+                tone: documentReviewTone(doc.approval_status, doc.flagged),
               },
               expiry: { kind: "text", text: doc.expires_on ?? "—" },
               file: { kind: "document", text: "View", documentId: doc.id },
@@ -49,7 +45,7 @@ export default async function MyDocumentsPage() {
           }
         })}
         empty="No documents"
-        emptyDescription="Upload a PDF or photo below. It waits for review."
+        emptyDescription="Upload a PDF or photo below. The assistant checks it, and anything it cannot approve waits for a person."
       />
       <ActionForm action={uploadDocumentAction.bind(null, context.workerId)} submitLabel="Upload">
         <div className="grid gap-1.5">

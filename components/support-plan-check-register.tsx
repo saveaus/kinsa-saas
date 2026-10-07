@@ -68,19 +68,13 @@ export async function SupportPlanCheckRegister() {
           tone: resultTone[result],
         },
         status: {
-          kind: "chip",
+          kind: "recordStatus",
           text: supportPlanCheckStandingLabel(standing),
           tone: standingTone[standing],
-        },
-        source: {
-          kind: "text",
-          text: check.drafted_by === "assistant" ? "Assistant" : "Person",
-        },
-        record: {
-          kind: "supportPlanCheckDraft",
-          text: check.status === "draft" ? "Accept" : "Recorded",
-          checkId: check.id,
           draft: check.status === "draft",
+          acceptedLabel: supportPlanCheckStandingLabel("recorded"),
+          acceptedTone: standingTone.recorded,
+          target: { kind: "supportPlanCheck", id: check.id },
         },
         file:
           check.original_filename && check.mime_type
@@ -124,8 +118,6 @@ export async function SupportPlanCheckRegister() {
           { id: "plan", label: "Plan" },
           { id: "result", label: "Result" },
           { id: "status", label: "Status" },
-          { id: "source", label: "Source" },
-          { id: "record", label: "Record", locked: true },
           { id: "file", label: "File", locked: true },
         ]}
         rows={rows}

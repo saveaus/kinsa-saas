@@ -10,10 +10,10 @@ import {
 
 const LEVEL_CLASS = [
   "bg-muted",
-  "bg-emerald-200 dark:bg-emerald-900/70",
-  "bg-emerald-400 dark:bg-emerald-700",
-  "bg-emerald-600 dark:bg-emerald-500",
-  "bg-emerald-800 dark:bg-emerald-300",
+  "bg-primary/20",
+  "bg-primary/45",
+  "bg-primary/70",
+  "bg-primary",
 ] as const
 
 const ACTOR_FILTERS = [
@@ -155,7 +155,7 @@ export function ActivityHeatmap({
             Show all activity
           </Link>
         ) : (
-          <p className="text-xs text-muted-foreground">Select a day to filter the log</p>
+          <p className="text-xs text-muted-foreground">Select a day to filter activity</p>
         )}
       </div>
     </section>

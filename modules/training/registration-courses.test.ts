@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { parseLesson } from "@/modules/training/lesson"
+import { parseLesson, resolveSituation, toPublicLesson } from "@/modules/training/lesson"
 import { registrationCourses } from "@/modules/training/library/registration-courses"
 
 describe("registration-group courses", () => {
@@ -45,6 +45,38 @@ describe("registration-group courses", () => {
               )
             )
           }
+        }
+      }
+    }
+  })
+
+  it("shows what a decision leads to, and hides that until the worker chooses", () => {
+    for (const course of registrationCourses) {
+      const lesson = parseLesson(course.lesson)
+      assert.ok(lesson, course.code)
+      const situations = lesson.steps.filter((step) => step.kind === "situation")
+      assert.equal(situations.length, 3, course.code)
+      const published = toPublicLesson(lesson)
+      for (const step of situations) {
+        if (step.kind !== "situation") continue
+        const safe = step.choices.filter((choice) => choice.safe)
+        assert.equal(safe.length, 1, step.id)
+        for (const choice of step.choices) {
+          assert.ok(choice.outcome.length > 40, step.id)
+        }
+        const unsafe = step.choices.find((choice) => !choice.safe)
+        assert.ok(unsafe)
+        const held = resolveSituation(step, unsafe.id)
+        assert.equal(held.advance, false)
+        if (!held.advance) assert.equal(held.outcome, unsafe.outcome)
+        const moved = resolveSituation(step, safe[0].id)
+        assert.equal(moved.advance, true)
+        const hidden = published.find((item) => item.id === step.id)
+        assert.equal(hidden?.kind, "situation")
+        if (hidden?.kind !== "situation") continue
+        for (const choice of hidden.choices) {
+          assert.equal("outcome" in choice, false)
+          assert.equal("safe" in choice, false)
         }
       }
     }

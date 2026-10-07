@@ -21,19 +21,14 @@ import { Chip, type ChipTone } from "@/components/chip"
 import { ParticipantActiveChip } from "@/components/participant-active-chip"
 import { EmptyState } from "@/components/empty-state"
 import { DocumentViewButton } from "@/components/document-view-button"
+import { IncidentFileButton } from "@/components/incident-actions"
+import { LogFileButton } from "@/components/log-actions"
+import { SupportPlanCheckFileButton } from "@/components/support-plan-check-actions"
+import { PolicyFileButton } from "@/components/policy-actions"
 import {
-  IncidentDraftActions,
-  IncidentFileButton,
-} from "@/components/incident-actions"
-import { LogDraftActions, LogFileButton } from "@/components/log-actions"
-import {
-  SupportPlanCheckDraftActions,
-  SupportPlanCheckFileButton,
-} from "@/components/support-plan-check-actions"
-import {
-  PolicyDraftActions,
-  PolicyFileButton,
-} from "@/components/policy-actions"
+  RecordStatusMenu,
+  type RecordStatusTarget,
+} from "@/components/record-status-menu"
 import { EditReminderRuleButton } from "@/components/reminder-rule-actions"
 import { CourseSettingsButton } from "@/components/course-settings-actions"
 import { ReviewActions } from "@/components/review-actions"
@@ -61,19 +56,27 @@ import {
   type ComplianceItemStatus,
   type WorkerCompliance,
 } from "@/modules/documents/compliance"
-import type { StaffRole } from "@/modules/workforce/roles"
 import type { ReminderCategory } from "@/modules/reminders/categories"
 
 export type RecordCell =
   | { kind: "text"; text: string }
-  | { kind: "link"; text: string; href: string }
+  | { kind: "link"; text: string; href: string; detail?: string; compact?: boolean }
   | { kind: "badge"; text: string; tone: "ok" | "warn" | "danger" | "neutral" }
   | { kind: "chip"; text: string; tone: ChipTone }
+  | {
+      kind: "recordStatus"
+      text: string
+      tone: ChipTone
+      draft: boolean
+      acceptedLabel: string
+      acceptedTone: ChipTone
+      target: RecordStatusTarget
+    }
   | { kind: "participantActive"; participantId: string; active: boolean }
   | { kind: "overall"; overall: WorkerCompliance["overall"] }
   | { kind: "item"; status: ComplianceItemStatus; text: string }
   | { kind: "document"; text: string; documentId: string }
-  | { kind: "review"; text: string; documentId: string }
+  | { kind: "review"; text: string; documentId: string; status: "pending" | "approved" | "rejected" }
   | {
       kind: "policyFile"
       text: string
@@ -82,7 +85,6 @@ export type RecordCell =
       filename: string
       mimeType: string
     }
-  | { kind: "policyDraft"; text: string; policyId: string; draft: boolean }
   | {
       kind: "incidentFile"
       text: string
@@ -92,7 +94,6 @@ export type RecordCell =
       filename: string
       mimeType: string
     }
-  | { kind: "incidentDraft"; text: string; incidentId: string; draft: boolean }
   | {
       kind: "supportPlanCheckFile"
       text: string
@@ -100,12 +101,6 @@ export type RecordCell =
       note: string
       filename: string
       mimeType: string
-    }
-  | {
-      kind: "supportPlanCheckDraft"
-      text: string
-      checkId: string
-      draft: boolean
     }
   | {
       kind: "logFile"
@@ -116,7 +111,6 @@ export type RecordCell =
       filename: string
       mimeType: string
     }
-  | { kind: "logDraft"; text: string; entryId: string; draft: boolean }
   | { kind: "score"; met: number; total: number; percent: number }
   | { kind: "progress"; percent: number }
   | {
@@ -135,7 +129,8 @@ export type RecordCell =
       title: string
       passMark: number
       renewalMonths: number | null
-      roles: StaffRole[]
+      roles: string[]
+      roleOptions?: { value: string; label: string }[]
     }
 
 export type RecordColumn = {
@@ -143,6 +138,10 @@ export type RecordColumn = {
   label: string
   /** Utility columns stay visible and skip sort, filter, and the header menu. */
   locked?: boolean
+  /** Cut long cell text so this column stays within the table. */
+  clip?: boolean
+  /** Fixed width for a short column when another column clips text. */
+  width?: string
 }
 
 export type RecordRow = {
@@ -231,13 +230,30 @@ function CellView({
     case "text":
       return cell.text || "—"
     case "link":
+      if (cell.compact) {
+        return (
+          <Link
+            href={cell.href}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            {cell.text}
+          </Link>
+        )
+      }
       return (
-        <Link
-          href={cell.href}
-          className="font-medium text-foreground hover:underline"
-        >
-          {cell.text}
-        </Link>
+        <div className="grid min-w-48 gap-0.5 py-0.5">
+          <Link
+            href={cell.href}
+            className="font-medium text-foreground hover:underline"
+          >
+            {cell.text}
+          </Link>
+          {cell.detail ? (
+            <p className="line-clamp-2 text-xs font-normal text-muted-foreground">
+              {cell.detail}
+            </p>
+          ) : null}
+        </div>
       )
     case "badge":
       return (
@@ -263,6 +279,17 @@ function CellView({
           <Chip tone={cell.tone}>{cell.text}</Chip>
         </button>
       )
+    case "recordStatus":
+      return (
+        <RecordStatusMenu
+          draft={cell.draft}
+          label={cell.text}
+          tone={cell.tone}
+          acceptedLabel={cell.acceptedLabel}
+          acceptedTone={cell.acceptedTone}
+          target={cell.target}
+        />
+      )
     case "participantActive":
       return (
         <ParticipantActiveChip
@@ -275,7 +302,7 @@ function CellView({
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[#F1F2F4]">
             <span
-              className="block h-full rounded-full bg-[#7BC96F]"
+              className="block h-full rounded-full bg-primary"
               style={{ width: `${cell.percent}%` }}
             />
           </span>
@@ -289,7 +316,7 @@ function CellView({
         <span className="flex min-w-28 items-center gap-2">
           <span className="h-1.5 w-24 overflow-hidden rounded-full bg-[#F1F2F4]">
             <span
-              className="block h-full rounded-full bg-[#7BC96F]"
+              className="block h-full rounded-full bg-primary"
               style={{ width: `${cell.percent}%` }}
             />
           </span>
@@ -331,7 +358,7 @@ function CellView({
     case "document":
       return <DocumentViewButton documentId={cell.documentId} />
     case "review":
-      return <ReviewActions documentId={cell.documentId} />
+      return <ReviewActions documentId={cell.documentId} status={cell.status} />
     case "policyFile":
       return (
         <PolicyFileButton
@@ -340,12 +367,6 @@ function CellView({
           filename={cell.filename}
           mimeType={cell.mimeType}
         />
-      )
-    case "policyDraft":
-      return cell.draft ? (
-        <PolicyDraftActions policyId={cell.policyId} />
-      ) : (
-        "Accepted"
       )
     case "incidentFile":
       return (
@@ -357,12 +378,6 @@ function CellView({
           mimeType={cell.mimeType}
         />
       )
-    case "incidentDraft":
-      return cell.draft ? (
-        <IncidentDraftActions incidentId={cell.incidentId} />
-      ) : (
-        "Recorded"
-      )
     case "supportPlanCheckFile":
       return (
         <SupportPlanCheckFileButton
@@ -371,12 +386,6 @@ function CellView({
           filename={cell.filename}
           mimeType={cell.mimeType}
         />
-      )
-    case "supportPlanCheckDraft":
-      return cell.draft ? (
-        <SupportPlanCheckDraftActions checkId={cell.checkId} />
-      ) : (
-        "Recorded"
       )
     case "logFile":
       return (
@@ -388,12 +397,6 @@ function CellView({
           mimeType={cell.mimeType}
         />
       )
-    case "logDraft":
-      return cell.draft ? (
-        <LogDraftActions entryId={cell.entryId} />
-      ) : (
-        "Recorded"
-      )
     case "courseSettings":
       return (
         <CourseSettingsButton
@@ -402,6 +405,7 @@ function CellView({
           passMark={cell.passMark}
           renewalMonths={cell.renewalMonths}
           roles={cell.roles}
+          roleOptions={cell.roleOptions}
         />
       )
     default: {
@@ -416,8 +420,10 @@ export function RecordTable({
   columns,
   rows,
   actions,
+  toolbar,
   empty = "No records",
   emptyDescription,
+  emptyAction,
   selectable = false,
   selectedIds,
   onSelectedChange,
@@ -431,8 +437,10 @@ export function RecordTable({
   columns: RecordColumn[]
   rows: RecordRow[]
   actions?: React.ReactNode
+  toolbar?: React.ReactNode
   empty?: string
   emptyDescription?: string
+  emptyAction?: React.ReactNode
   selectable?: boolean
   selectedIds?: string[]
   onSelectedChange?: (ids: string[]) => void
@@ -591,7 +599,7 @@ export function RecordTable({
     <div className="w-full min-w-0 shrink-0 overflow-hidden rounded-lg border bg-card">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
         <p className="flex items-center gap-2 text-sm font-medium">
-          <span className="size-2.5 rounded-[3px] bg-emerald-500" aria-hidden />
+          <span className="size-2.5 rounded-[3px] bg-primary" aria-hidden />
           {title}
         </p>
         <div className="flex items-center gap-1">
@@ -670,6 +678,7 @@ export function RecordTable({
             className="h-7 w-44 pl-7"
           />
         </div>
+        {toolbar}
         <Popover>
           <PopoverTrigger
             render={
@@ -932,6 +941,7 @@ export function RecordTable({
               <EmptyState
                 title={empty}
                 description={emptyDescription}
+                action={emptyAction}
                 className="py-12"
               />
             )
@@ -947,7 +957,12 @@ export function RecordTable({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+          <table
+            className={cn(
+              "w-full border-collapse text-[13px]",
+              visibleIds.some((id) => columnById.get(id)?.clip) && "table-fixed"
+            )}
+          >
             <thead>
               <tr className="border-b text-left text-xs font-normal text-muted-foreground">
                 {selectable ? (
@@ -972,6 +987,7 @@ export function RecordTable({
                     return (
                       <th
                         key={column.id}
+                        style={column.width ? { width: column.width } : undefined}
                         className="px-3 py-2 font-normal whitespace-nowrap"
                       >
                         {column.label}
@@ -981,6 +997,7 @@ export function RecordTable({
                   return (
                     <th
                       key={column.id}
+                      style={column.width ? { width: column.width } : undefined}
                       className="px-1 py-1 font-normal whitespace-nowrap"
                     >
                       <DropdownMenu>
@@ -1041,6 +1058,7 @@ export function RecordTable({
                       <EmptyState
                         title={empty}
                         description={emptyDescription}
+                        action={emptyAction}
                         className="py-12"
                       />
                     )}
@@ -1067,17 +1085,39 @@ export function RecordTable({
                         />
                       </td>
                     ) : null}
-                    {visibleIds.map((columnId) => (
-                      <td
-                        key={columnId}
-                        className="px-3 py-1.5 whitespace-nowrap"
-                      >
-                        <CellView
-                          cell={row.cells[columnId]}
-                          onFilter={(text) => filterColumn(columnId, text)}
-                        />
-                      </td>
-                    ))}
+                    {visibleIds.map((columnId) => {
+                      const column = columnById.get(columnId)
+                      const text = cellText(row.cells[columnId])
+                      return (
+                        <td
+                          key={columnId}
+                          style={
+                            column?.width ? { width: column.width } : undefined
+                          }
+                          className={cn(
+                            "px-3 py-1.5 whitespace-nowrap",
+                            column?.clip && "overflow-hidden"
+                          )}
+                        >
+                          {column?.clip ? (
+                            <span
+                              className="block truncate"
+                              title={text || undefined}
+                            >
+                              <CellView
+                                cell={row.cells[columnId]}
+                                onFilter={(text) => filterColumn(columnId, text)}
+                              />
+                            </span>
+                          ) : (
+                            <CellView
+                              cell={row.cells[columnId]}
+                              onFilter={(text) => filterColumn(columnId, text)}
+                            />
+                          )}
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))
               )}

@@ -2,9 +2,16 @@
 
 import { revalidatePath } from "next/cache"
 
-import { isApplicableStandard } from "@/lib/ndis-practice-standards"
+import { addYears, format } from "date-fns"
+
+import {
+  isApplicableStandard,
+  standardsForGroups,
+} from "@/lib/ndis-practice-standards"
+import { libraryPolicy } from "@/modules/policies/library"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 
 export type PolicyActionState = { error?: string; message?: string }
@@ -24,6 +31,8 @@ export async function createPolicyAction(
 ): Promise<PolicyActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const intent = String(formData.get("intent") ?? "")
   const name = cleanName(formData.get("name"))
@@ -107,12 +116,125 @@ export async function createPolicyAction(
   }
 
   revalidatePath("/policies")
+  revalidatePath("/dashboard")
   revalidatePath("/activity")
   return {
     message: accepting
-      ? "Policy accepted."
+      ? "Policy accepted. It counts once it is acknowledged or linked to a record."
       : "Draft saved. It does not count until someone accepts it.",
   }
+}
+
+export async function startLibraryPolicyAction(
+  _prev: PolicyActionState,
+  formData: FormData
+): Promise<PolicyActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+
+  const standardCode = String(formData.get("standard_code") ?? "")
+  const standard = standardsForGroups(
+    context.organisationRegistrationGroups
+  ).find((item) => item.code === standardCode)
+  if (!standard) {
+    return {
+      error:
+        "Choose a practice standard that applies to your registration groups.",
+    }
+  }
+
+  const supabase = await createServerSupabase()
+  const { data: existing, error: existingError } = await supabase
+    .from("policies")
+    .select("id")
+    .eq("organisation_id", context.organisationId)
+    .eq("standard_code", standardCode)
+    .limit(1)
+  if (existingError) return { error: existingError.message }
+  if ((existing ?? []).length > 0) {
+    return { error: "That practice standard already has a policy." }
+  }
+
+  const { name, body } = libraryPolicy(standard)
+  const policyId = crypto.randomUUID()
+  const { error } = await supabase.from("policies").insert({
+    id: policyId,
+    organisation_id: context.organisationId,
+    name,
+    standard_code: standardCode,
+    review_on: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+    status: "draft",
+    body,
+    storage_path: null,
+    original_filename: null,
+    mime_type: null,
+    file_size_bytes: null,
+    drafted_by: "person",
+    created_by: context.userId,
+    accepted_by: null,
+    accepted_at: null,
+  })
+  if (error) return { error: error.message }
+
+  await recordAudit("policy.drafted", "policy", policyId, {
+    name,
+    standardCode,
+    draftedBy: "library",
+  })
+  revalidatePath("/policies")
+  revalidatePath("/dashboard")
+  revalidatePath("/activity")
+  return {
+    message:
+      "Draft started from the library. It does not count until someone accepts it and it is acknowledged or linked to a record.",
+  }
+}
+
+export async function acknowledgePolicyAction(
+  _prev: PolicyActionState,
+  formData: FormData
+): Promise<PolicyActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+
+  const policyId = String(formData.get("policy_id") ?? "")
+  const supabase = await createServerSupabase()
+  const { data: policy, error: readError } = await supabase
+    .from("policies")
+    .select("id, name, status")
+    .eq("id", policyId)
+    .eq("organisation_id", context.organisationId)
+    .maybeSingle()
+  if (readError) return { error: readError.message }
+  if (!policy) return { error: "That policy is no longer available." }
+  if (policy.status !== "accepted") {
+    return { error: "Accept the policy before acknowledging it." }
+  }
+
+  const { error } = await supabase.from("policy_acknowledgements").insert({
+    organisation_id: context.organisationId,
+    policy_id: policyId,
+    user_id: context.userId,
+  })
+  if (error) {
+    if (error.code === "23505") {
+      return { message: "You have already acknowledged this policy." }
+    }
+    return { error: error.message }
+  }
+
+  await recordAudit("policy.acknowledged", "policy", policyId, {
+    name: policy.name,
+  })
+  revalidatePath("/policies")
+  revalidatePath(`/policies/${policyId}`)
+  revalidatePath("/dashboard")
+  revalidatePath("/activity")
+  return { message: "Policy acknowledged." }
 }
 
 export async function acceptPolicyAction(
@@ -122,6 +244,8 @@ export async function acceptPolicyAction(
 ): Promise<PolicyActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
@@ -146,8 +270,13 @@ export async function acceptPolicyAction(
     draftedBy: data.drafted_by,
   })
   revalidatePath("/policies")
+  revalidatePath(`/policies/${policyId}`)
+  revalidatePath("/dashboard")
   revalidatePath("/activity")
-  return { message: "Policy accepted." }
+  return {
+    message:
+      "Policy accepted. It counts once it is acknowledged or linked to a record.",
+  }
 }
 
 export async function deletePolicyDraftAction(
@@ -157,6 +286,8 @@ export async function deletePolicyDraftAction(
 ): Promise<PolicyActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
   const { data: existing, error: readError } = await supabase
@@ -179,7 +310,9 @@ export async function deletePolicyDraftAction(
 
   if (error) return { error: error.message }
 
-  await supabase.storage.from("policies").remove([existing.storage_path])
+  if (existing.storage_path) {
+    await supabase.storage.from("policies").remove([existing.storage_path])
+  }
   await recordAudit("policy.draft_removed", "policy", policyId, {})
   revalidatePath("/policies")
   revalidatePath("/activity")

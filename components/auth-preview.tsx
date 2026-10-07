@@ -70,7 +70,7 @@ export function OrganisationPreview({
         <div className="w-28 shrink-0 border-r bg-muted/40 px-2 py-2 text-[10px] text-muted-foreground">
           <p className="truncate px-1 font-medium text-foreground">{workspace}</p>
           <p className="mt-2 rounded bg-background px-1.5 py-1 text-foreground">Workers</p>
-          <p className="px-1.5 py-1">Courses</p>
+          <p className="px-1.5 py-1">Policies</p>
           <p className="px-1.5 py-1">Approvals</p>
           <p className="px-1.5 py-1">Evidence</p>
         </div>

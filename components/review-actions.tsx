@@ -1,43 +1,86 @@
 "use client"
 
-import { ActionForm } from "@/components/action-form"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useTransition } from "react"
+
+import { Chip } from "@/components/chip"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import type { DocumentApprovalStatus } from "@/lib/database.types"
+import { documentReviewTone } from "@/modules/documents/assist-decision"
 import { reviewDocumentAction } from "@/modules/documents/actions"
 
-export function ReviewActions({ documentId }: { documentId: string }) {
+const statuses = ["pending", "rejected", "approved"] as const
+
+function statusLabel(status: DocumentApprovalStatus) {
+  switch (status) {
+    case "pending":
+      return "Pending"
+    case "rejected":
+      return "Rejected"
+    case "approved":
+      return "Approved"
+    default: {
+      const unreachable: never = status
+      return unreachable
+    }
+  }
+}
+
+export function ReviewActions({
+  documentId,
+  status,
+}: {
+  documentId: string
+  status: DocumentApprovalStatus
+}) {
+  const [value, setValue] = useState(status)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  function choose(next: DocumentApprovalStatus) {
+    if (pending || next === value) return
+    const previous = value
+    setValue(next)
+    setError(null)
+    startTransition(async () => {
+      const result = await reviewDocumentAction(documentId, next)
+      if (result.error) {
+        setValue(previous)
+        setError(result.error)
+      }
+    })
+  }
+
   return (
-    <div className="flex items-center gap-1">
-      <Popover>
-        <PopoverTrigger render={<Button size="sm" variant="outline" />}>Approve</PopoverTrigger>
-        <PopoverContent align="end" className="w-72">
-          <ActionForm
-            action={reviewDocumentAction.bind(null, documentId, "approved")}
-            submitLabel="Approve"
-          >
-            <div className="grid gap-1.5">
-              <Label htmlFor={`approve-${documentId}`}>Note for the worker</Label>
-              <Textarea id={`approve-${documentId}`} name="review_note" />
-            </div>
-          </ActionForm>
-        </PopoverContent>
-      </Popover>
-      <Popover>
-        <PopoverTrigger render={<Button size="sm" variant="outline" />}>Reject</PopoverTrigger>
-        <PopoverContent align="end" className="w-72">
-          <ActionForm
-            action={reviewDocumentAction.bind(null, documentId, "rejected")}
-            submitLabel="Reject"
-          >
-            <div className="grid gap-1.5">
-              <Label htmlFor={`reject-${documentId}`}>Reason</Label>
-              <Textarea id={`reject-${documentId}`} name="review_note" required />
-            </div>
-          </ActionForm>
-        </PopoverContent>
-      </Popover>
-    </div>
+    <span className="inline-flex flex-col items-start gap-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={pending}
+          aria-label="Document status"
+          className="flex max-w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        >
+          <Chip tone={documentReviewTone(value, false)}>{statusLabel(value)}</Chip>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-40">
+          {statuses.map((item) => (
+            <DropdownMenuCheckboxItem
+              key={item}
+              checked={value === item}
+              closeOnClick={false}
+              onCheckedChange={(checked) => {
+                if (checked) choose(item)
+              }}
+            >
+              {statusLabel(item)}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+    </span>
   )
 }

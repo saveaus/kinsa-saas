@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { ActionForm } from "@/components/action-form"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,10 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  acceptLogEntryAction,
-  deleteLogEntryDraftAction,
-} from "@/modules/logs/actions"
 
 export function LogFileButton({
   entryId,
@@ -72,27 +67,5 @@ export function LogFileButton({
         </Link>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function LogDraftActions({ entryId }: { entryId: string }) {
-  return (
-    <div className="flex gap-1">
-      <ActionForm
-        action={acceptLogEntryAction.bind(null, entryId)}
-        submitLabel="Accept"
-        pendingLabel="Accepting..."
-        submitSize="sm"
-        className="w-fit"
-      />
-      <ActionForm
-        action={deleteLogEntryDraftAction.bind(null, entryId)}
-        submitLabel="Remove"
-        pendingLabel="Removing..."
-        submitVariant="outline"
-        submitSize="sm"
-        className="w-fit"
-      />
-    </div>
   )
 }

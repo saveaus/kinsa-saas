@@ -1,3 +1,5 @@
+import { BillingNoticeBar } from "@/components/billing-notice-bar"
+import { Toaster } from "@/components/ui/toast"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,18 +16,26 @@ import {
   CollapsedSidebarTrigger,
   WorkspaceHeader,
 } from "@/components/app-nav"
+import { formatPersonLabel } from "@/lib/person-name"
 import { can, type TenantContext } from "@/lib/tenant"
+import type { BillingNotice } from "@/modules/billing/access"
+import { listAssistantChats } from "@/modules/assistant/chats"
 import { signOutAction } from "@/modules/identity/actions"
-
-export function AppShell({
+export async function AppShell({
   context,
   children,
+  billingNotice,
 }: {
   context: TenantContext
   children: React.ReactNode
+  billingNotice?: BillingNotice | null
 }) {
   const admin = can(context, "workers.read_all")
-  const initials = (context.fullName ?? context.email)
+  const chats = await listAssistantChats(context)
+  const personLabel = context.fullName
+    ? formatPersonLabel(context.fullName)
+    : context.email
+  const initials = personLabel
     .split(" ")
     .map((part) => part[0])
     .join("")
@@ -34,6 +44,7 @@ export function AppShell({
 
   return (
     <SidebarProvider>
+      <Toaster />
       <Sidebar>
         <WorkspaceHeader
           name={context.organisationName}
@@ -41,7 +52,7 @@ export function AppShell({
           admin={admin}
         />
         <SidebarContent>
-          <AppNav admin={admin} />
+          <AppNav admin={admin} chats={chats} />
         </SidebarContent>
         <SidebarFooter className="gap-1">
           <AppFooterNav admin={admin} />
@@ -51,9 +62,7 @@ export function AppShell({
                 {initials || "U"}
               </AvatarFallback>
             </Avatar>
-            <p className="min-w-0 flex-1 truncate text-xs">
-              {context.fullName ?? context.email}
-            </p>
+            <p className="min-w-0 flex-1 truncate text-xs">{personLabel}</p>
             <form action={signOutAction}>
               <Button
                 type="submit"
@@ -72,7 +81,8 @@ export function AppShell({
         <header className="flex h-12 shrink-0 items-center px-2 md:hidden">
           <SidebarTrigger />
         </header>
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 has-[[data-worker-record]]:overflow-hidden has-[[data-worker-record]]:p-0 md:p-6 md:has-[[data-worker-record]]:p-0">
+        {billingNotice ? <BillingNoticeBar notice={billingNotice} /> : null}
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 has-[[data-assistant]]:overflow-hidden has-[[data-assistant]]:p-0 has-[[data-worker-record]]:overflow-hidden has-[[data-worker-record]]:p-0 md:p-6 md:has-[[data-assistant]]:p-0 md:has-[[data-worker-record]]:p-0">
           {children}
         </div>
       </SidebarInset>

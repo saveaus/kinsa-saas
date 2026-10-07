@@ -62,7 +62,9 @@ export async function proxy(request: NextRequest) {
   const isPublic =
     publicPaths.some(
       (path) => pathname === path || pathname.startsWith(`${path}/`)
-    ) || pathname.startsWith("/api/cron")
+    ) ||
+    pathname.startsWith("/api/cron") ||
+    pathname === "/api/stripe/webhook"
 
   if (!user && !isPublic) {
     const redirectUrl = request.nextUrl.clone()

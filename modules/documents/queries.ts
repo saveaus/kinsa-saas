@@ -29,11 +29,13 @@ export async function listEnabledTypes(context: TenantContext) {
     const type = row.document_type_versions as unknown as {
       id: string
       name: string
+      code: string
       requires_expiry: boolean
     }
     return {
       id: type.id,
       name: type.name,
+      code: type.code,
       requires_expiry: type.requires_expiry,
       required: row.required,
     }
@@ -64,6 +66,7 @@ export async function listPendingDocuments(context: TenantContext) {
     )
     .eq("organisation_id", context.organisationId)
     .eq("approval_status", "pending")
+    .order("flagged", { ascending: false })
     .order("created_at")
   if (error) throw new Error(error.message)
   return data ?? []
@@ -97,13 +100,7 @@ export async function getLapsingWindowDays(context: TenantContext) {
 
 export async function buildWorkforceCompliance(context: TenantContext) {
   const supabase = await createServerSupabase()
-  const [
-    workersResult,
-    types,
-    documentsResult,
-    coursesResult,
-    enrolmentsResult,
-  ] = await Promise.all([
+  const [workersResult, types, documentsResult] = await Promise.all([
     supabase
       .from("workers")
       .select("*")
@@ -115,30 +112,17 @@ export async function buildWorkforceCompliance(context: TenantContext) {
       .from("documents")
       .select("*")
       .eq("organisation_id", context.organisationId),
-    supabase
-      .from("courses")
-      .select("*")
-      .eq("organisation_id", context.organisationId)
-      .eq("status", "published"),
-    supabase
-      .from("enrolments")
-      .select("*")
-      .eq("organisation_id", context.organisationId),
   ])
   if (workersResult.error) throw new Error(workersResult.error.message)
   if (documentsResult.error) throw new Error(documentsResult.error.message)
-  if (coursesResult.error) throw new Error(coursesResult.error.message)
-  if (enrolmentsResult.error) throw new Error(enrolmentsResult.error.message)
   const workers = workersResult.data
   const documents = documentsResult.data
-  const courses = coursesResult.data
-  const enrolments = enrolmentsResult.data
 
   const [lapsingWindowDays, requirementMaps] = await Promise.all([
     getLapsingWindowDays(context),
     listRequirementMaps(context),
   ])
-  const scoped = attachRequirementRoles(courses ?? [], types, requirementMaps)
+  const scoped = attachRequirementRoles([], types, requirementMaps)
   return (workers ?? []).map((worker) => ({
     worker,
     compliance: computeWorkerCompliance({
@@ -146,8 +130,8 @@ export async function buildWorkforceCompliance(context: TenantContext) {
       workerRoles: asStaffRoles(worker.staff_roles),
       types: scoped.types,
       documents: documents ?? [],
-      courses: scoped.courses,
-      enrolments: enrolments ?? [],
+      courses: [],
+      enrolments: [],
       lapsingWindowDays,
     }),
   }))

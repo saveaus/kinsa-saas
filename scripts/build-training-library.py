@@ -74,9 +74,8 @@ def paragraphs_for(title: str, bullets: list[str], purpose: str) -> list[str]:
     if lead and not lead.endswith("."):
         lead += "."
     second = (
-        f"In this part, {title[0].lower() + title[1:]}. {joined} "
-        "Read your provider's policy for this topic alongside this course. "
-        "Completing the course shows you have done the training. It does not by itself guarantee an audit outcome."
+        f"{joined} "
+        "Your provider's policy for this topic sets the local steps. Use it with what you learn here."
     )
     if "state" in joined.lower() or "child" in title.lower():
         second += " Where state or territory law differs, follow your provider's state-specific policy."

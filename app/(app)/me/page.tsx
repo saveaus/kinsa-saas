@@ -7,7 +7,6 @@ import { OverallBadge } from "@/components/status-badge"
 import { requireTenant } from "@/lib/tenant"
 import { computeWorkerCompliance, type ComplianceItem } from "@/modules/documents/compliance"
 import { getLapsingWindowDays, listDocumentsForWorker, listEnabledTypes } from "@/modules/documents/queries"
-import { listWorkerEnrolments } from "@/modules/training/queries"
 import { attachRequirementRoles, listRequirementMaps } from "@/modules/workforce/requirements"
 import { asStaffRoles } from "@/modules/workforce/roles"
 import { createServerSupabase } from "@/lib/supabase/server"
@@ -24,27 +23,27 @@ export default async function MePage() {
     )
   }
 
-  const [types, documents, enrolments, lapsingWindowDays, requirementMaps] = await Promise.all([
+  const [types, documents, lapsingWindowDays, requirementMaps] = await Promise.all([
     listEnabledTypes(context),
     listDocumentsForWorker(context, context.workerId),
-    listWorkerEnrolments(context, context.workerId),
     getLapsingWindowDays(context),
     listRequirementMaps(context),
   ])
   const supabase = await createServerSupabase()
-  const [{ data: courses }, { data: profile }] = await Promise.all([
-    supabase.from("courses").select("*").eq("organisation_id", context.organisationId).eq("status", "published"),
-    supabase.from("workers").select("staff_roles").eq("id", context.workerId).maybeSingle(),
-  ])
-  const scoped = attachRequirementRoles(courses ?? [], types, requirementMaps)
+  const { data: profile } = await supabase
+    .from("workers")
+    .select("staff_roles")
+    .eq("id", context.workerId)
+    .maybeSingle()
+  const scoped = attachRequirementRoles([], types, requirementMaps)
 
   const compliance = computeWorkerCompliance({
     workerId: context.workerId,
     workerRoles: asStaffRoles(profile?.staff_roles),
     types: scoped.types,
     documents,
-    courses: scoped.courses,
-    enrolments,
+    courses: [],
+    enrolments: [],
     lapsingWindowDays,
   })
 
@@ -80,7 +79,7 @@ export default async function MePage() {
             item: {
               kind: "link" as const,
               text: item.label,
-              href: item.kind === "course" ? "/me/courses" : "/me/documents",
+              href: "/me/documents",
             },
             status: {
               kind: "item" as const,
@@ -103,8 +102,8 @@ export default async function MePage() {
   )
 }
 
-function itemHref(item: ComplianceItem) {
-  return item.kind === "course" ? "/me/courses" : "/me/documents"
+function itemHref(_item: ComplianceItem) {
+  return "/me/documents"
 }
 
 function itemStatus(item: ComplianceItem) {

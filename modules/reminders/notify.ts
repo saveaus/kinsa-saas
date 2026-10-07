@@ -1,3 +1,4 @@
+import { personName } from "@/lib/person-name"
 import { hasAdminClient, createAdminSupabase } from "@/lib/supabase/admin"
 import { sendReminderEmail } from "@/modules/reminders/email"
 
@@ -9,15 +10,31 @@ export async function notifyExamAttemptsExhausted(input: {
   if (!hasAdminClient()) return
   try {
     const admin = createAdminSupabase()
-    const [{ data: worker }, { data: course }, { data: members }] = await Promise.all([
-      admin.from("workers").select("first_name, last_name").eq("id", input.workerId).maybeSingle(),
-      admin.from("courses").select("title").eq("id", input.courseId).maybeSingle(),
-      admin.from("memberships").select("user_id").eq("organisation_id", input.organisationId).eq("role", "admin"),
-    ])
+    const [{ data: worker }, { data: course }, { data: members }] =
+      await Promise.all([
+        admin
+          .from("workers")
+          .select("first_name, last_name")
+          .eq("id", input.workerId)
+          .maybeSingle(),
+        admin
+          .from("courses")
+          .select("title")
+          .eq("id", input.courseId)
+          .maybeSingle(),
+        admin
+          .from("memberships")
+          .select("user_id")
+          .eq("organisation_id", input.organisationId)
+          .eq("role", "admin"),
+      ])
     const userIds = (members ?? []).map((member) => member.user_id)
     if (!worker || !course || userIds.length === 0) return
-    const { data: users } = await admin.from("users").select("email").in("id", userIds)
-    const name = `${worker.first_name} ${worker.last_name}`
+    const { data: users } = await admin
+      .from("users")
+      .select("email")
+      .in("id", userIds)
+    const name = personName(worker.first_name, worker.last_name)
     for (const user of users ?? []) {
       if (!user.email) continue
       await sendReminderEmail({

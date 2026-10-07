@@ -2,8 +2,37 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@react-pdf/renderer"],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "32mb",
+    },
+  },
   async redirects() {
-    return [{ source: "/audit", destination: "/activity", permanent: false }]
+    return [
+      { source: "/audit", destination: "/activity", permanent: false },
+      { source: "/account", destination: "/settings/password", permanent: false },
+      { source: "/reminders", destination: "/settings/emails", permanent: false },
+      {
+        source: "/settings/reminders",
+        destination: "/settings/emails",
+        permanent: false,
+      },
+      { source: "/logs", destination: "/dashboard", permanent: false },
+      { source: "/settings/logs", destination: "/settings/general", permanent: false },
+      { source: "/incidents", destination: "/logs/incidents", permanent: false },
+      { source: "/complaints", destination: "/logs/complaints", permanent: false },
+      { source: "/risks", destination: "/logs/risks", permanent: false },
+      {
+        source: "/restrictive-practices",
+        destination: "/logs/restrictive-practices",
+        permanent: false,
+      },
+      {
+        source: "/support-plan-checks",
+        destination: "/participants",
+        permanent: false,
+      },
+    ]
   },
 }
 

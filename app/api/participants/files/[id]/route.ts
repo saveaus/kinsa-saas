@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { getParticipantFile } from "@/modules/participants/queries"
 import type { ParticipantRecordKind } from "@/modules/participants/standing"
@@ -26,6 +27,7 @@ export async function GET(
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const file = await getParticipantFile(context, id)
   if (!file) {
     return NextResponse.json({ error: "File not found" }, { status: 404 })

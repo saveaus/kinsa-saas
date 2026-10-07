@@ -1,10 +1,12 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { BackLink } from "@/components/back-link"
 import { Chip } from "@/components/chip"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { listLogRegisters } from "@/modules/logs/queries"
 import { logShown } from "@/modules/logs/standing"
 import { getSupportPlanCheck } from "@/modules/support-plan-checks/queries"
@@ -16,6 +18,7 @@ import {
 export async function SupportPlanCheckFilePage({ id }: { id: string }) {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const check = await getSupportPlanCheck(context, id)
   if (!check) notFound()
   const logs = await listLogRegisters(context)
@@ -28,12 +31,7 @@ export async function SupportPlanCheckFilePage({ id }: { id: string }) {
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <Link
-          href="/support-plan-checks"
-          className="w-fit text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to support plan checks
-        </Link>
+        <BackLink href={`/participants/${check.participant_id}`} />
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-heading text-lg">{check.note}</h1>
           <Chip tone={result === "followed" ? "green" : "red"}>

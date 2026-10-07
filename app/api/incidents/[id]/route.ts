@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { getIncident } from "@/modules/incidents/queries"
 import { incidentAuditAction } from "@/modules/incidents/standing"
@@ -13,6 +14,7 @@ export async function GET(
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const incident = await getIncident(context, id)
   if (!incident) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 })

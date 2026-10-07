@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 
+import { BackLink } from "@/components/back-link"
 import { CourseCertificateView } from "@/components/course-certificate"
 import { PrintButton } from "@/components/print-button"
 import { buttonVariants } from "@/components/ui/button"
@@ -21,6 +22,9 @@ export async function CertificateScreen({
 
   return (
     <div className="mx-auto grid min-h-full max-w-3xl content-center gap-6 overflow-y-auto px-6 py-10">
+      <div className="print:hidden">
+        <BackLink href={backHref}>{backLabel}</BackLink>
+      </div>
       <CourseCertificateView certificate={certificate} />
       <div className="flex flex-wrap gap-2 print:hidden">
         <a
@@ -30,9 +34,6 @@ export async function CertificateScreen({
           Download PDF
         </a>
         <PrintButton />
-        <a href={backHref} className={buttonVariants({ variant: "ghost" })}>
-          {backLabel}
-        </a>
       </div>
     </div>
   )

@@ -3,25 +3,16 @@ import { notFound } from "next/navigation"
 
 import { AddIncidentDialog } from "@/components/add-incident-dialog"
 import { AddParticipantRecordDialog } from "@/components/add-participant-record-dialog"
-import { AddSupportPlanCheckDialog } from "@/components/add-support-plan-check-dialog"
 import { ActionForm } from "@/components/action-form"
-import { Chip, type ChipTone } from "@/components/chip"
-import {
-  IncidentDraftActions,
-  IncidentFileButton,
-} from "@/components/incident-actions"
+import { BackLink } from "@/components/back-link"
+import type { ChipTone } from "@/components/chip"
+import { IncidentFileButton } from "@/components/incident-actions"
 import { ParticipantActiveChip } from "@/components/participant-active-chip"
-import { PersonLogSections } from "@/components/person-log-sections"
-import {
-  ParticipantDraftActions,
-  ParticipantFileButton,
-} from "@/components/participant-record-actions"
-import {
-  SupportPlanCheckDraftActions,
-  SupportPlanCheckFileButton,
-} from "@/components/support-plan-check-actions"
+import { ParticipantFileButton } from "@/components/participant-record-actions"
+import { RecordStatusMenu } from "@/components/record-status-menu"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { listParticipantIncidents } from "@/modules/incidents/queries"
 import { listLogRegisters, listPersonLogEntries } from "@/modules/logs/queries"
 import { logShown } from "@/modules/logs/standing"
@@ -44,14 +35,6 @@ import {
   type ParticipantDocumentStanding,
   type ParticipantRecordKind,
 } from "@/modules/participants/standing"
-import { listParticipantSupportPlanChecks } from "@/modules/support-plan-checks/queries"
-import {
-  supportPlanCheckResult,
-  supportPlanCheckResultLabel,
-  supportPlanCheckStanding,
-  supportPlanCheckStandingLabel,
-} from "@/modules/support-plan-checks/standing"
-
 const standingTone: Record<ParticipantDocumentStanding, ChipTone> = {
   missing: "gray",
   draft: "gray",
@@ -79,19 +62,20 @@ function fileDates(file: ParticipantFile) {
   }
 }
 
-function fileStandingLabel(file: ParticipantFile) {
+function fileStanding(file: ParticipantFile, status = file.status) {
   const standing = documentStanding(file.kind, [
     {
       kind: file.kind,
-      status: file.status,
+      status,
       endsOn: file.ends_on,
       reviewOn: file.review_on,
     },
   ])
-  return documentStandingLabel(
-    file.kind,
-    standing === "missing" ? "draft" : standing
-  )
+  return standing === "missing" ? "draft" : standing
+}
+
+function fileStandingLabel(file: ParticipantFile) {
+  return documentStandingLabel(file.kind, fileStanding(file))
 }
 
 function FileSection({
@@ -119,15 +103,8 @@ function FileSection({
         </p>
       ) : (
         matching.map((file) => {
-          const standing = documentStanding(file.kind, [
-            {
-              kind: file.kind,
-              status: file.status,
-              endsOn: file.ends_on,
-              reviewOn: file.review_on,
-            },
-          ])
-          const tone = standingTone[standing === "missing" ? "draft" : standing]
+          const standing = fileStanding(file)
+          const accepted = fileStanding(file, "accepted")
           return (
             <div
               key={file.id}
@@ -136,14 +113,17 @@ function FileSection({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">{file.original_filename}</p>
                 <p className="text-xs text-muted-foreground">
-                  {fileDates(file)} ·{" "}
-                  {file.drafted_by === "assistant" ? "Assistant" : "Person"}
+                  {fileDates(file)}
                 </p>
               </div>
-              <Chip tone={tone}>{fileStandingLabel(file)}</Chip>
-              {file.status === "draft" ? (
-                <ParticipantDraftActions recordId={file.id} />
-              ) : null}
+              <RecordStatusMenu
+                draft={file.status === "draft"}
+                label={fileStandingLabel(file)}
+                tone={standingTone[standing]}
+                acceptedLabel={documentStandingLabel(file.kind, accepted)}
+                acceptedTone={standingTone[accepted]}
+                target={{ kind: "participantRecord", id: file.id }}
+              />
               <ParticipantFileButton
                 participantId={participantId}
                 recordId={file.id}
@@ -166,33 +146,24 @@ export default async function ParticipantPage({
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const participant = await getParticipant(context, id)
   if (!participant) notFound()
-  const [files, incidents, checks, logs, entries] = await Promise.all([
+  const [files, incidents, logs, entries] = await Promise.all([
     listParticipantFiles(context, id),
     listParticipantIncidents(context, id),
-    listParticipantSupportPlanChecks(context, id),
     listLogRegisters(context),
     listPersonLogEntries(context, { participantId: id }),
   ])
-  const acceptedPlans = files.filter(
-    (file) => file.kind === "support_plan" && file.status === "accepted"
-  )
   const accepted =
     files.some((file) => file.status === "accepted") ||
     incidents.some((incident) => incident.status === "accepted") ||
-    checks.some((check) => check.status === "accepted") ||
     entries.some((entry) => entry.status === "accepted")
 
   return (
     <div className="grid gap-4">
       <div className="grid gap-1">
-        <Link
-          href="/participants"
-          className="w-fit text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to participants
-        </Link>
+        <BackLink href="/participants" />
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-heading text-lg">{participant.name}</h1>
           <ParticipantActiveChip
@@ -228,81 +199,6 @@ export default async function ParticipantPage({
         title="Support plan"
         files={files}
       />
-      {logShown(logs, "support_plan_check") ? (
-        <section className="overflow-hidden rounded-lg border bg-card">
-          <div className="flex items-center justify-between gap-3 px-3 py-2">
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-sm font-medium">Support plan checks</h2>
-              <Link
-                href="/support-plan-checks"
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Open register
-              </Link>
-            </div>
-            <AddSupportPlanCheckDialog
-              participantId={participant.id}
-              plans={acceptedPlans.map((plan) => ({
-                id: plan.id,
-                participantId: participant.id,
-                label: plan.review_on
-                  ? `${plan.original_filename} · Review ${formatDate(plan.review_on)}`
-                  : plan.original_filename,
-              }))}
-            />
-          </div>
-          {checks.length === 0 ? (
-            <p className="border-t px-3 py-3 text-sm text-muted-foreground">
-              Nothing recorded yet.
-            </p>
-          ) : (
-            checks.map((check) => {
-              const standing = supportPlanCheckStanding(check.status)
-              const result = supportPlanCheckResult(check.followed)
-              return (
-                <div
-                  key={check.id}
-                  className="flex flex-wrap items-center gap-3 border-t px-3 py-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{check.note}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(check.checked_on)} ·{" "}
-                      <Link
-                        href={`/participants/${participant.id}/files/${check.plan_id}`}
-                        className="hover:text-foreground"
-                      >
-                        {check.plan_filename ?? "Plan"}
-                      </Link>
-                      {" · "}
-                      {check.drafted_by === "assistant"
-                        ? "Assistant"
-                        : "Person"}
-                    </p>
-                  </div>
-                  <Chip tone={result === "followed" ? "green" : "red"}>
-                    {supportPlanCheckResultLabel(result)}
-                  </Chip>
-                  <Chip tone={standing === "recorded" ? "green" : "gray"}>
-                    {supportPlanCheckStandingLabel(standing)}
-                  </Chip>
-                  {check.status === "draft" ? (
-                    <SupportPlanCheckDraftActions checkId={check.id} />
-                  ) : null}
-                  {check.original_filename && check.mime_type ? (
-                    <SupportPlanCheckFileButton
-                      checkId={check.id}
-                      note={check.note}
-                      filename={check.original_filename}
-                      mimeType={check.mime_type}
-                    />
-                  ) : null}
-                </div>
-              )
-            })
-          )}
-        </section>
-      ) : null}
       {participantLogKinds
         .filter((kind) => logShown(logs, kind))
         .map((kind) => {
@@ -343,16 +239,17 @@ export default async function ParticipantPage({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm">{incident.summary}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDate(incident.occurred_on)} ·{" "}
-                          {incident.drafted_by === "assistant"
-                            ? "Assistant"
-                            : "Person"}
+                          {formatDate(incident.occurred_on)}
                         </p>
                       </div>
-                      <Chip tone={tone}>{incidentStandingLabel(standing)}</Chip>
-                      {incident.status === "draft" ? (
-                        <IncidentDraftActions incidentId={incident.id} />
-                      ) : null}
+                      <RecordStatusMenu
+                        draft={incident.status === "draft"}
+                        label={incidentStandingLabel(standing)}
+                        tone={tone}
+                        acceptedLabel={incidentStandingLabel("recorded")}
+                        acceptedTone="green"
+                        target={{ kind: "incident", id: incident.id }}
+                      />
                       <IncidentFileButton
                         incidentId={incident.id}
                         kind={incident.kind}
@@ -367,11 +264,6 @@ export default async function ParticipantPage({
             </section>
           )
         })}
-      <PersonLogSections
-        logs={logs}
-        entries={entries}
-        participantId={participant.id}
-      />
     </div>
   )
 }

@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RoleCheckboxes } from "@/components/role-checkboxes"
 import { updateCourseSettingsAction } from "@/modules/training/actions"
-import type { StaffRole } from "@/modules/workforce/roles"
 
 export function CourseSettingsButton({
   courseId,
@@ -22,25 +21,42 @@ export function CourseSettingsButton({
   passMark,
   renewalMonths,
   roles,
+  roleOptions,
 }: {
   courseId: string
   title: string
   passMark: number
   renewalMonths: number | null
-  roles: StaffRole[]
+  roles: string[]
+  roleOptions?: { value: string; label: string }[]
 }) {
   return (
     <Dialog>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>Edit</DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        Edit
+      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Pass mark, renewal, and which roles must complete this course.</DialogDescription>
+          <DialogDescription>
+            Pass mark, renewal, and which teams must complete this course.
+          </DialogDescription>
         </DialogHeader>
-        <ActionForm action={updateCourseSettingsAction.bind(null, courseId)} submitLabel="Save">
+        <ActionForm
+          action={updateCourseSettingsAction.bind(null, courseId)}
+          submitLabel="Save"
+        >
           <div className="grid gap-1.5">
             <Label htmlFor={`pass-${courseId}`}>Pass mark (%)</Label>
-            <Input id={`pass-${courseId}`} name="pass_mark" type="number" min={0} max={100} defaultValue={passMark} required />
+            <Input
+              id={`pass-${courseId}`}
+              name="pass_mark"
+              type="number"
+              min={0}
+              max={100}
+              defaultValue={passMark}
+              required
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={`renewal-${courseId}`}>Renewal (months)</Label>
@@ -54,8 +70,10 @@ export function CourseSettingsButton({
               placeholder="No renewal"
             />
           </div>
-          <RoleCheckboxes selected={roles} />
-          <p className="text-xs text-muted-foreground">Leave every role clear to keep this course optional.</p>
+          <RoleCheckboxes selected={roles} options={roleOptions} />
+          <p className="text-xs text-muted-foreground">
+            Leave every role clear to keep this course optional.
+          </p>
         </ActionForm>
       </DialogContent>
     </Dialog>

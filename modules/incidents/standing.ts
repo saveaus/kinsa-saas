@@ -48,10 +48,13 @@ export function incidentRegisterTitle(kind: IncidentKind) {
 export function incidentListPath(kind: IncidentKind) {
   switch (kind) {
     case "incident":
+      return "/logs/incidents"
     case "complaint":
+      return "/logs/complaints"
     case "risk":
+      return "/logs/risks"
     case "restrictive_practice":
-      return `/logs?log=${kind}`
+      return "/logs/restrictive-practices"
     default: {
       const unreachable: never = kind
       return unreachable

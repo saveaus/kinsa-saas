@@ -2,6 +2,7 @@ import { AddParticipantDialog } from "@/components/add-participant-dialog"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import type { ChipTone } from "@/components/chip"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { listParticipants } from "@/modules/participants/queries"
 import {
   documentStanding,
@@ -32,6 +33,7 @@ function standingCell(
 export default async function ParticipantsPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const participants = await listParticipants(context)
 
   const rows: RecordRow[] = participants.map((participant) => ({

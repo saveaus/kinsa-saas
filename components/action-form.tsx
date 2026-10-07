@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/toast"
 import { cn } from "cn"
 
 type State = { error?: string; message?: string; inviteUrl?: string }
@@ -20,21 +21,31 @@ export function ActionForm({
   fullWidth = false,
   submitClassName,
   onSuccess,
+  id,
+  bare = false,
+  onPendingChange,
 }: {
   action: (state: State, formData: FormData) => Promise<State>
   children?: React.ReactNode
   submitLabel: string
   pendingLabel?: string
-  submitVariant?: "default" | "outline" | "ghost" | "destructive"
+  submitVariant?: "default" | "outline" | "ghost" | "destructive" | "link"
   submitSize?: "default" | "sm" | "xs"
   className?: string
   hideSubmit?: boolean
   fullWidth?: boolean
   submitClassName?: string
   onSuccess?: () => void
+  id?: string
+  bare?: boolean
+  onPendingChange?: (pending: boolean) => void
 }) {
   const [state, formAction, pending] = useActionState(action, {})
   const submitted = useRef(false)
+
+  useEffect(() => {
+    onPendingChange?.(pending)
+  }, [pending, onPendingChange])
 
   useEffect(() => {
     if (pending) {
@@ -43,17 +54,26 @@ export function ActionForm({
     }
     if (submitted.current && state.message && !state.error) {
       submitted.current = false
+      toast.add({ title: state.message, type: "success", timeout: 4000 })
       onSuccess?.()
     }
   }, [pending, state.message, state.error, onSuccess])
 
   return (
-    <form action={formAction} className={cn("grid gap-3", className)}>
+    <form
+      id={id}
+      action={formAction}
+      className={bare ? className : cn("grid gap-3", className)}
+    >
       {state.error ? (
         <Alert variant="destructive">
           <AlertDescription>
             {state.error}
-            {state.inviteUrl ? <span className="mt-1 block break-all text-xs">{state.inviteUrl}</span> : null}
+            {state.inviteUrl ? (
+              <span className="mt-1 block text-xs break-all">
+                {state.inviteUrl}
+              </span>
+            ) : null}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -62,7 +82,9 @@ export function ActionForm({
           <AlertDescription>
             {state.message}
             {state.inviteUrl ? (
-              <span className="mt-1 block break-all text-xs">{state.inviteUrl}</span>
+              <span className="mt-1 block text-xs break-all">
+                {state.inviteUrl}
+              </span>
             ) : null}
           </AlertDescription>
         </Alert>

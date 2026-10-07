@@ -13,6 +13,7 @@ export type ComplianceItem = {
   kind: "document" | "course"
   status: ComplianceItemStatus
   expiresOn?: string | null
+  code?: string | null
 }
 
 export type WorkerCompliance = {
@@ -34,6 +35,7 @@ type DocumentLike = {
 type TypeLike = {
   id: string
   name: string
+  code?: string | null
   requires_expiry: boolean
   required: boolean
   roles?: StaffRole[]
@@ -42,6 +44,7 @@ type TypeLike = {
 type CourseLike = {
   id: string
   title: string
+  code?: string | null
   required: boolean
   renewal_months?: number | null
   roles?: StaffRole[]
@@ -105,6 +108,7 @@ export function computeWorkerCompliance(input: {
       key: `doc:${type.id}`,
       label: type.name,
       kind: "document",
+      code: type.code ?? null,
       status,
       expiresOn,
     })
@@ -138,6 +142,7 @@ export function computeWorkerCompliance(input: {
       key: `course:${course.id}`,
       label: course.title,
       kind: "course",
+      code: course.code ?? null,
       status,
       expiresOn,
     })

@@ -1,0 +1,20 @@
+---
+description: Every list, table, or section that can be empty gets an empty state
+alwaysApply: true
+---
+
+# Empty states
+
+When a screen can have zero records, render an empty state in the same change. Use `EmptyState` from `components/empty-state.tsx` for page and settings content. A sidebar group uses a short line in the group, with the action that fills it.
+
+The empty state names what is missing and offers the action that adds the first item. A sidebar group with nothing in it shows that action, such as an Add worker button, and no suggested items.
+
+```tsx
+<EmptyState
+  title="No workers yet"
+  description="Add a worker and they show in the list."
+  action={<AddWorkerButton />}
+/>
+```
+
+Do not leave a blank list, an empty table body, or a heading with no content underneath.

@@ -1,15 +1,15 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { Briefcase, ChevronDown, Ellipsis, FileText, GraduationCap, Mail, Plus, Shield, User } from "lucide-react"
+import { Briefcase, ChevronDown, Ellipsis, FileText, Mail, Plus, Shield, User } from "lucide-react"
 import Link from "next/link"
 import { Cell, Pie, PieChart } from "recharts"
 
 import { ActionForm } from "@/components/action-form"
+import { BackLink } from "@/components/back-link"
 import { EmptyState } from "@/components/empty-state"
 import { Chip, type ChipTone } from "@/components/chip"
 import { DocumentViewButton } from "@/components/document-view-button"
-import { enrolmentStatusLabel, enrolmentStatusTone, renewalLabel } from "@/components/course-card"
 import { ItemStatusBadge } from "@/components/status-badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { formatPersonLabel } from "@/lib/person-name"
 import type { ComplianceItemStatus } from "@/modules/documents/compliance"
 import { STAFF_ROLES, sameRoles, staffRoleLabel, type StaffRole } from "@/modules/workforce/roles"
 import type { WorkerActionState } from "@/modules/workers/actions"
@@ -58,18 +59,6 @@ type WorkerFile = {
   expiry: string
 }
 
-type AssignedCourse = {
-  id: string
-  title: string
-  description: string | null
-  coverImage: string | null
-  status: string
-  percent: number
-  renewalMonths: number | null
-  exam: string
-  assigned: string
-}
-
 type WorkerFields = {
   firstName: string
   lastName: string
@@ -92,7 +81,6 @@ export function WorkerRecord({
   activityOlderHref,
   points,
   files,
-  courses,
   types,
   updateAction,
   deleteAction,
@@ -100,7 +88,7 @@ export function WorkerRecord({
   uploadAction,
   csvHref,
   pdfHref,
-  logs,
+  roleOptions,
 }: {
   name: string
   email: string
@@ -112,7 +100,6 @@ export function WorkerRecord({
   activityOlderHref?: string | null
   points: CompliancePoint[]
   files: WorkerFile[]
-  courses: AssignedCourse[]
   types: Array<{ id: string; name: string }>
   updateAction: (state: WorkerActionState, formData: FormData) => Promise<WorkerActionState>
   deleteAction: (state: WorkerActionState, formData: FormData) => Promise<WorkerActionState>
@@ -120,7 +107,7 @@ export function WorkerRecord({
   uploadAction: (state: DocumentActionState, formData: FormData) => Promise<DocumentActionState>
   csvHref: string
   pdfHref: string
-  logs?: ReactNode
+  roleOptions: { code: string; name: string }[]
 }) {
   const [tab, setTab] = useState("activity")
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -141,7 +128,8 @@ export function WorkerRecord({
     <div data-worker-record="" className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#E8F0FE] text-xs font-medium text-[#3B6FD8]">
+          <BackLink href="/workers" />
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-medium text-primary">
             {initials}
           </span>
           <h2 className="truncate text-[15px] font-medium">{name}</h2>
@@ -157,12 +145,16 @@ export function WorkerRecord({
               className="w-fit gap-0"
             />
           ) : null}
-          <a href={csvHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
-            Export CSV
-          </a>
-          <a href={pdfHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
-            Export PDF
-          </a>
+          <DropdownMenu>
+            <DropdownMenuTrigger className={buttonVariants({ size: "sm", variant: "outline" })}>
+              Export
+              <ChevronDown />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem render={<a href={csvHref} />}>CSV</DropdownMenuItem>
+              <DropdownMenuItem render={<a href={pdfHref} />}>PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {canManage ? (
             <DropdownMenu>
               <DropdownMenuTrigger className={buttonVariants({ size: "sm", variant: "outline" })} aria-label="More actions">
@@ -181,31 +173,38 @@ export function WorkerRecord({
       <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_22.5rem]">
         <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
           <p className="flex h-8 shrink-0 items-center truncate px-4 text-xs text-muted-foreground">{email}</p>
-          <Tabs value={tab} onValueChange={setTab} className="min-h-0 min-w-0 flex-1 gap-0 overflow-hidden px-2">
-          <TabsList variant="line" className="h-9 w-full shrink-0 justify-start border-b px-2">
+          <Tabs value={tab} onValueChange={setTab} className="min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
+          <div className="flex h-11 shrink-0 items-end gap-2 border-b px-4">
+          <TabsList variant="line" className="h-9 min-w-0 flex-1 justify-start px-0">
             <TabsTrigger value="activity" className="flex-none px-2.5 text-[13px] font-normal">
               Activity
             </TabsTrigger>
             <TabsTrigger value="documents" className="flex-none px-2.5 text-[13px] font-normal">
               Documents
             </TabsTrigger>
-            <TabsTrigger value="courses" className="flex-none px-2.5 text-[13px] font-normal">
-              Courses
-            </TabsTrigger>
             <TabsTrigger value="compliance" className="flex-none px-2.5 text-[13px] font-normal">
               Compliance
             </TabsTrigger>
-            {logs ? (
-              <TabsTrigger value="logs" className="flex-none px-2.5 text-[13px] font-normal">
-                Logs
-              </TabsTrigger>
-            ) : null}
           </TabsList>
-          {logs ? (
-            <TabsContent value="logs" className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
-              <div className="grid gap-4">{logs}</div>
-            </TabsContent>
+          {canManage ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={`${buttonVariants({ size: "sm", variant: "outline" })} mb-2`}>
+                <Plus />
+                Add
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setTab("documents")
+                    setUploadOpen(true)
+                  }}
+                >
+                  Document
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
+          </div>
           <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
             {groups.length === 0 ? (
               <EmptyState
@@ -222,7 +221,7 @@ export function WorkerRecord({
                     <ul>
                       {group.events.map((event) => (
                         <li key={event.id} className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
-                          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-[#E8F0FE] text-[#3B6FD8]">
+                          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-primary/10 text-primary">
                             <span className="size-1.5 rounded-[2px] bg-current" />
                           </span>
                           <p>
@@ -293,7 +292,7 @@ export function WorkerRecord({
                   <DialogTitle>Add document</DialogTitle>
                   <DialogDescription>Upload a file for this worker. It waits for review.</DialogDescription>
                 </DialogHeader>
-                <ActionForm action={uploadAction} submitLabel="Add document">
+                <ActionForm action={uploadAction} submitLabel="Add document" onSuccess={() => setUploadOpen(false)}>
                   <div className="grid gap-1.5">
                     <Label htmlFor="document_type_version_id">Type</Label>
                     <select
@@ -321,56 +320,6 @@ export function WorkerRecord({
               </DialogContent>
             </Dialog>
           </TabsContent>
-          <TabsContent value="courses" className="min-h-0 flex-1 overflow-y-auto px-2 pt-3">
-            {courses.length === 0 ? (
-              <EmptyState
-                className="py-12"
-                icon={<GraduationCap className="size-4" />}
-                title="No courses assigned"
-                description="Assigned courses will show up here."
-                action={
-                  canManage ? (
-                    <Link href="/courses" className={buttonVariants({ size: "sm" })}>
-                      Assign a course
-                    </Link>
-                  ) : null
-                }
-              />
-            ) : (
-              <ul>
-                {courses.map((course) => {
-                  const row = (
-                    <>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{course.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {course.percent}% · {course.exam === "—" ? "Exam not sat" : course.exam}
-                          {renewalLabel(course.renewalMonths) ? ` · ${renewalLabel(course.renewalMonths)}` : ""} · Assigned{" "}
-                          {course.assigned}
-                        </span>
-                      </span>
-                      <Chip tone={enrolmentStatusTone(course.status)}>{enrolmentStatusLabel(course.status)}</Chip>
-                    </>
-                  )
-                  const className = "flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/60"
-                  if (course.status === "completed") {
-                    return (
-                      <li key={course.id}>
-                        <Link href={`/certificates/${course.id}`} className={className}>
-                          {row}
-                        </Link>
-                      </li>
-                    )
-                  }
-                  return (
-                    <li key={course.id} className={className}>
-                      {row}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </TabsContent>
           <TabsContent value="compliance" className="min-h-0 flex-1 overflow-y-auto px-2 pt-3">
             <ComplianceList
               points={points}
@@ -378,7 +327,6 @@ export function WorkerRecord({
                 setTab("documents")
                 setUploadOpen(true)
               }}
-              onOpenCourses={() => setTab("courses")}
             />
           </TabsContent>
         </Tabs>
@@ -386,7 +334,7 @@ export function WorkerRecord({
 
         <aside className="flex h-full min-h-0 flex-col overflow-hidden border-t lg:border-t-0 lg:border-l">
           <div className="hidden h-8 lg:block" />
-          <div className="flex h-9 items-end border-b px-3">
+          <div className="flex h-11 items-end border-b px-3">
             <span className="border-b-2 border-foreground px-1 pb-2 text-[13px]">Details</span>
           </div>
           <button
@@ -398,7 +346,12 @@ export function WorkerRecord({
             Record details
           </button>
           <div className={detailsOpen ? "" : "hidden"}>
-            <DetailsForm fields={fields} canManage={canManage} updateAction={updateAction} />
+            <DetailsForm
+              fields={fields}
+              canManage={canManage}
+              updateAction={updateAction}
+              roleOptions={roleOptions}
+            />
           </div>
           <button
             type="button"
@@ -417,7 +370,7 @@ export function WorkerRecord({
             <DialogHeader>
               <DialogTitle>Delete {name}?</DialogTitle>
               <DialogDescription>
-                Their name, email, and login are removed, and their documents and course history are cleared. This cannot be undone.
+                Their name, email, and login are removed, and their documents are cleared. This cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <ActionForm action={deleteAction} submitLabel="Delete worker" pendingLabel="Deleting..." submitVariant="destructive" />
@@ -429,7 +382,7 @@ export function WorkerRecord({
 }
 
 const complianceChartConfig = {
-  met: { label: "Current", color: "#7BC96F" },
+  met: { label: "Current", color: "var(--primary)" },
   rest: { label: "Remaining", theme: { light: "#F1F2F4", dark: "#32363C" } },
 } satisfies ChartConfig
 
@@ -471,11 +424,9 @@ function ComplianceGraph({ percent, score }: { percent: number; score: string })
 function ComplianceList({
   points,
   onOpenDocuments,
-  onOpenCourses,
 }: {
   points: CompliancePoint[]
   onOpenDocuments: () => void
-  onOpenCourses: () => void
 }) {
   if (points.length === 0) {
     return (
@@ -499,15 +450,6 @@ function ComplianceList({
             <ItemStatusBadge status={point.status} />
           </>
         )
-        if (point.href === "#courses") {
-          return (
-            <li key={point.key}>
-              <button type="button" className={`${className} w-full text-left`} onClick={onOpenCourses}>
-                {body}
-              </button>
-            </li>
-          )
-        }
         if (point.href === "#upload") {
           return (
             <li key={point.key}>
@@ -529,14 +471,31 @@ function ComplianceList({
   )
 }
 
+function teamChoices(
+  roleOptions: { code: string; name: string }[],
+  selected: string[]
+) {
+  const known = new Set(roleOptions.map((role) => role.code))
+  const extras = selected
+    .filter((role) => !known.has(role))
+    .map((role) => ({ code: role, name: staffRoleLabel(role) }))
+  const base =
+    roleOptions.length > 0
+      ? roleOptions
+      : STAFF_ROLES.map((role) => ({ code: role, name: staffRoleLabel(role) }))
+  return [...base, ...extras]
+}
+
 function DetailsForm({
   fields,
   canManage,
   updateAction,
+  roleOptions,
 }: {
   fields: WorkerFields
   canManage: boolean
   updateAction: (state: WorkerActionState, formData: FormData) => Promise<WorkerActionState>
+  roleOptions: { code: string; name: string }[]
 }) {
   const [editing, setEditing] = useState<"firstName" | "lastName" | "email" | null>(null)
   const [firstName, setFirstName] = useState(fields.firstName)
@@ -544,6 +503,8 @@ function DetailsForm({
   const [email, setEmail] = useState(fields.email)
   const [employment, setEmployment] = useState(fields.employment)
   const [staffRoles, setStaffRoles] = useState(fields.staffRoles)
+  const names = Object.fromEntries(roleOptions.map((item) => [item.code, item.name]))
+  const choices = teamChoices(roleOptions, staffRoles)
   const dirty =
     firstName !== fields.firstName ||
     lastName !== fields.lastName ||
@@ -576,7 +537,7 @@ function DetailsForm({
           />
         ) : (
           <button type="button" className="text-left" onClick={() => canManage && setEditing("firstName")}>
-            {firstName}
+            {formatPersonLabel(firstName)}
           </button>
         )}
       </AttributeRow>
@@ -591,7 +552,7 @@ function DetailsForm({
           />
         ) : (
           <button type="button" className="text-left" onClick={() => canManage && setEditing("lastName")}>
-            {lastName}
+            {formatPersonLabel(lastName)}
           </button>
         )}
       </AttributeRow>
@@ -646,7 +607,7 @@ function DetailsForm({
           </Chip>
         )}
       </AttributeRow>
-      <AttributeRow icon={<User className="size-3.5" />} label="Roles">
+      <AttributeRow icon={<User className="size-3.5" />} label="Teams">
         {staffRoles.map((role) => (
           <input key={role} type="hidden" name="staff_roles" value={role} />
         ))}
@@ -655,26 +616,27 @@ function DetailsForm({
             <DropdownMenuTrigger className="flex max-w-full flex-wrap gap-1 text-left">
               {staffRoles.map((role) => (
                 <Chip key={role} tone="blue">
-                  {staffRoleLabel(role)}
+                  {staffRoleLabel(role, names)}
                 </Chip>
               ))}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-52">
-              {STAFF_ROLES.map((role) => (
+            <DropdownMenuContent align="start" className="w-64">
+              {choices.map((role) => (
                 <DropdownMenuCheckboxItem
-                  key={role}
-                  checked={staffRoles.includes(role)}
+                  key={role.code}
+                  checked={staffRoles.includes(role.code)}
                   closeOnClick={false}
                   onCheckedChange={(checked) => {
                     const next = checked
-                      ? [...staffRoles, role]
-                      : staffRoles.filter((item) => item !== role)
-                    const roles = STAFF_ROLES.filter((item) => next.includes(item))
+                      ? [...staffRoles, role.code]
+                      : staffRoles.filter((item) => item !== role.code)
+                    const order = teamChoices(roleOptions, next).map((item) => item.code)
+                    const roles = order.filter((item) => next.includes(item))
                     if (roles.length === 0) return
                     setStaffRoles(roles)
                   }}
                 >
-                  {staffRoleLabel(role)}
+                  {role.name}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
@@ -683,7 +645,7 @@ function DetailsForm({
           <span className="flex flex-wrap gap-1">
             {staffRoles.map((role) => (
               <Chip key={role} tone="blue">
-                {staffRoleLabel(role)}
+                {staffRoleLabel(role, names)}
               </Chip>
             ))}
           </span>

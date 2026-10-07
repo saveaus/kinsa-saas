@@ -25,6 +25,23 @@ export type CheckStep = {
   image?: { src: string; alt: string }
 }
 
+export type SituationChoice = {
+  id: string
+  label: string
+  outcome: string
+  safe: boolean
+}
+
+export type SituationStep = {
+  id: string
+  kind: "situation"
+  kicker: string
+  title: string
+  scene: string
+  prompt: string
+  choices: SituationChoice[]
+}
+
 export type ExamQuestion = {
   id: string
   prompt: string
@@ -41,7 +58,7 @@ export type ExamStep = {
   questions: ExamQuestion[]
 }
 
-export type LessonStep = LearnStep | CheckStep | ExamStep
+export type LessonStep = LearnStep | CheckStep | SituationStep | ExamStep
 export type LessonContent = { version: 1; steps: LessonStep[] }
 
 export const EXAM_ATTEMPTS = 3
@@ -50,6 +67,9 @@ export const EXAM_SITTING = 15
 export type PublicLessonStep =
   | Omit<LearnStep, never>
   | Omit<CheckStep, "correct_option_id">
+  | (Omit<SituationStep, "choices"> & {
+      choices: Array<Pick<SituationChoice, "id" | "label">>
+    })
   | (Omit<ExamStep, "questions"> & {
       questions: Array<Omit<ExamQuestion, "correct_option_id">>
     })
@@ -61,18 +81,79 @@ export function parseLesson(value: Json | null): LessonContent | null {
   return value as LessonContent
 }
 
-export function toPublicLesson(lesson: LessonContent): PublicLessonStep[] {
-  return lesson.steps.map((step) => {
-    if (step.kind === "learn") return step
-    if (step.kind === "check") {
-      const { correct_option_id: _correct, ...rest } = step
-      return rest
+export type LessonOutlineItem = { label: string; start: number }
+
+export function lessonOutline(
+  steps: Array<{ kind: string; title: string }>
+): LessonOutlineItem[] {
+  const sections: LessonOutlineItem[] = []
+  steps.forEach((step, index) => {
+    if (step.kind === "learn" || step.kind === "situation") {
+      sections.push({ label: step.title, start: index })
     }
-    return {
-      ...step,
-      questions: step.questions.map(({ correct_option_id: _correct, ...question }) => question),
+    if (step.kind === "exam") {
+      sections.push({ label: "Check your understanding", start: index })
     }
   })
+  if (sections.length === 0) {
+    return [{ label: steps[0]?.title ?? "Lesson", start: 0 }]
+  }
+  if (sections[0].start > 0) {
+    sections.unshift({ label: steps[0]?.title ?? "Lesson", start: 0 })
+  }
+  return sections
+}
+
+export function toPublicLesson(lesson: LessonContent): PublicLessonStep[] {
+  return lesson.steps.map((step) => {
+    switch (step.kind) {
+      case "learn":
+        return step
+      case "check": {
+        const { correct_option_id: _correct, ...rest } = step
+        return rest
+      }
+      case "situation":
+        return {
+          ...step,
+          choices: step.choices.map(({ id, label }) => ({ id, label })),
+        }
+      case "exam":
+        return {
+          ...step,
+          questions: step.questions.map(({ correct_option_id: _correct, ...question }) => question),
+        }
+      default: {
+        const unreachable: never = step
+        return unreachable
+      }
+    }
+  })
+}
+
+export function resolveSituation(
+  step: SituationStep,
+  answer: string | undefined
+): { advance: true; outcome: string } | { advance: false; outcome?: string; error?: string } {
+  const choice = step.choices.find((item) => item.id === answer)
+  if (!choice) return { advance: false, error: "Choose what you would do." }
+  if (!choice.safe) return { advance: false, outcome: choice.outcome }
+  return { advance: true, outcome: choice.outcome }
+}
+
+export function stepFeedback(step: LearnStep | CheckStep | SituationStep) {
+  switch (step.kind) {
+    case "learn":
+      return undefined
+    case "check":
+      return step.feedback
+    case "situation":
+      return step.choices.find((choice) => choice.safe)?.outcome
+    default: {
+      const unreachable: never = step
+      return unreachable
+    }
+  }
 }
 
 function hashSeed(seed: string) {

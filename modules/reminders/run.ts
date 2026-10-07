@@ -1,6 +1,7 @@
 import { addDays, format, parseISO, startOfDay } from "date-fns"
 
 import { appUrl } from "@/lib/env"
+import { personName } from "@/lib/person-name"
 import { createAdminSupabase } from "@/lib/supabase/admin"
 import type { ReminderCategory } from "@/modules/reminders/categories"
 import { renderTemplate, sendReminderEmail } from "@/modules/reminders/email"
@@ -169,7 +170,7 @@ async function sendFollowUp(input: {
   }
 
   const values = {
-    worker_name: `${input.worker.first_name} ${input.worker.last_name}`,
+    worker_name: personName(input.worker.first_name, input.worker.last_name),
     item_name: input.itemName,
     document_type: input.itemName,
     course_name: input.itemName,
@@ -189,6 +190,17 @@ async function sendFollowUp(input: {
       .delete()
       .eq("id", created.id)
     if (deleteError) throw new Error(deleteError.message)
+    await input.supabase.from("audit_events").insert({
+      organisation_id: input.rule.organisation_id,
+      action: "reminder.failed",
+      target_type: "worker",
+      target_id: input.workerId,
+      metadata: {
+        reason: result.reason.slice(0, 240),
+        category: input.rule.category,
+        itemName: input.itemName,
+      },
+    })
     return "skipped" as const
   }
 

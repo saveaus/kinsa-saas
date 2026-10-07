@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
+import { requireRegistered } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { getPolicy } from "@/modules/policies/queries"
 
@@ -12,8 +13,13 @@ export async function GET(
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
+  await requireRegistered(context)
   const policy = await getPolicy(context, id)
-  if (!policy) {
+  if (
+    !policy?.storage_path ||
+    !policy.mime_type ||
+    !policy.original_filename
+  ) {
     return NextResponse.json({ error: "Policy not found" }, { status: 404 })
   }
 

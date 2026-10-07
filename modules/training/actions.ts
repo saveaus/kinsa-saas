@@ -7,13 +7,16 @@ import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
+import { listTeamCodes } from "@/modules/teams/queries"
 import { libraryLesson } from "@/modules/training/library"
 import {
   EXAM_ATTEMPTS,
   examLocked,
   examPassed,
   lessonForAttempt,
+  resolveSituation,
   scoreExam,
+  stepFeedback,
 } from "@/modules/training/lesson"
 import { parseQuiz, scoreQuiz } from "@/modules/training/quiz"
 import { courseLapsed } from "@/modules/training/renewal"
@@ -52,7 +55,8 @@ export async function updateCourseSettingsAction(
     renewalMonths = months
   }
 
-  const roles = parseStaffRoles(formData)
+  const allowed = await listTeamCodes(context)
+  const roles = parseStaffRoles(formData).filter((role) => allowed.has(role))
   const required = roles.length > 0
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
@@ -351,7 +355,7 @@ export async function advanceLessonAction(
   moduleId: string,
   stepIndex: number,
   answer?: string
-): Promise<TrainingActionState & { stepIndex?: number; feedback?: string }> {
+): Promise<TrainingActionState & { stepIndex?: number; feedback?: string; held?: boolean }> {
   const { context } = await requireTenant()
   requirePermission(context, "courses.take")
 
@@ -393,14 +397,32 @@ export async function advanceLessonAction(
     return {
       message: "Progress saved.",
       stepIndex: existing?.step_index,
-      feedback: step.kind === "check" ? step.feedback : undefined,
+      feedback: stepFeedback(step),
     }
   }
 
-  if (step.kind === "check" && answer !== step.correct_option_id) {
-    return {
-      error: "Not quite. Read the feedback and try again.",
-      feedback: step.feedback,
+  switch (step.kind) {
+    case "learn":
+      break
+    case "check":
+      if (answer !== step.correct_option_id) {
+        return {
+          error: "Not quite. Read the feedback and try again.",
+          feedback: step.feedback,
+        }
+      }
+      break
+    case "situation": {
+      const decision = resolveSituation(step, answer)
+      if (!decision.advance) {
+        if (decision.error) return { error: decision.error }
+        return { held: true, feedback: decision.outcome }
+      }
+      break
+    }
+    default: {
+      const unreachable: never = step
+      return unreachable
     }
   }
 
@@ -446,7 +468,7 @@ export async function advanceLessonAction(
   return {
     message: "Progress saved.",
     stepIndex: nextIndex,
-    feedback: step.kind === "check" ? step.feedback : undefined,
+    feedback: stepFeedback(step),
   }
 }
 
@@ -491,6 +513,57 @@ export async function reopenLapsedEnrolment(enrolmentId: string) {
   revalidatePath("/me/courses")
   revalidatePath("/me")
   revalidateCompliance()
+}
+
+export async function restartCourseAction(
+  enrolmentId: string,
+  _prev: TrainingActionState,
+  _formData: FormData
+): Promise<TrainingActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "courses.take")
+
+  const supabase = await createServerSupabase()
+  const { data: enrolment } = await supabase
+    .from("enrolments")
+    .select("id, worker_id, course_id")
+    .eq("id", enrolmentId)
+    .eq("organisation_id", context.organisationId)
+    .maybeSingle()
+
+  if (!enrolment || enrolment.worker_id !== context.workerId) {
+    return { error: "Enrolment not found." }
+  }
+
+  const { error: enrolmentError } = await supabase
+    .from("enrolments")
+    .update({ status: "assigned", completed_at: null })
+    .eq("id", enrolmentId)
+  if (enrolmentError) return { error: enrolmentError.message }
+
+  const { error: progressError } = await supabase
+    .from("lesson_progress")
+    .update({ step_index: 0 })
+    .eq("enrolment_id", enrolmentId)
+  if (progressError) return { error: progressError.message }
+
+  const { error: completionError } = await supabase
+    .from("completions")
+    .update({ passed: false, score: null, answers: null, attempt_count: 0 })
+    .eq("enrolment_id", enrolmentId)
+  if (completionError) return { error: completionError.message }
+
+  await recordAudit("enrolment.restarted", "enrolment", enrolmentId, {
+    courseId: enrolment.course_id,
+  })
+  revalidatePath(`/me/courses/${enrolmentId}`)
+  revalidatePath(`/me/courses/${enrolmentId}/learn`)
+  revalidatePath(`/me/courses/${enrolmentId}/certificate`)
+  revalidatePath("/me/courses")
+  revalidatePath("/me")
+  revalidatePath(`/courses/${enrolment.course_id}`)
+  revalidateCompliance()
+  return { message: "Course restarted." }
 }
 
 export async function resetExamAttemptsAction(
@@ -574,7 +647,7 @@ export async function submitExamAction(
     .maybeSingle()
 
   if ((progress?.step_index ?? 0) < examIndex) {
-    return { error: "Finish the lesson before you sit the exam." }
+    return { error: "Finish the lesson before you answer the questions." }
   }
 
   const { data: existing } = await supabase
@@ -584,7 +657,7 @@ export async function submitExamAction(
     .eq("course_module_id", moduleId)
     .maybeSingle()
 
-  if (existing?.passed) return { error: "You have already passed this exam." }
+  if (existing?.passed) return { error: "You have already passed." }
   const attemptCount = existing?.attempt_count ?? 0
   if (examLocked(false, attemptCount)) {
     return {

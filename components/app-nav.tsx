@@ -3,13 +3,11 @@
 import {
   Activity,
   BadgeCheck,
-  ClipboardList,
-  BookOpen,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   FileDown,
   FileText,
-  GraduationCap,
   KeyRound,
   LayoutDashboard,
   Settings,
@@ -22,7 +20,7 @@ import {
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 
 import {
   Collapsible,
@@ -41,6 +39,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AssistantNav } from "@/components/assistant-nav"
 import { OrgMark } from "@/components/org-mark"
 import {
   SidebarGroup,
@@ -54,8 +53,13 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "cn"
 import { signOutAction } from "@/modules/identity/actions"
+import type { AssistantChatLink } from "@/modules/assistant/chats"
 
-type NavItem = { href: string; label: string; icon: LucideIcon }
+type NavItem = {
+  href: string
+  label: string
+  icon?: LucideIcon
+}
 
 function adminGroups(): { label?: string; items: NavItem[] }[] {
   return [
@@ -65,30 +69,18 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
       ],
     },
     {
-      label: "People",
+      label: "Records",
       items: [
         { href: "/workers", label: "Workers", icon: Users },
         { href: "/participants", label: "Participants", icon: UserRound },
         { href: "/approvals", label: "Approvals", icon: BadgeCheck },
-      ],
-    },
-    {
-      label: "Governance",
-      items: [
         { href: "/policies", label: "Policies", icon: FileText },
-        { href: "/logs", label: "Logs", icon: ClipboardList },
-      ],
-    },
-    {
-      label: "Training",
-      items: [
-        { href: "/courses", label: "Courses", icon: BookOpen },
-        { href: "/me/courses", label: "My courses", icon: GraduationCap },
       ],
     },
     {
       label: "Reports",
       items: [
+        { href: "/audits", label: "Audits", icon: ClipboardCheck },
         { href: "/reports", label: "Evidence", icon: FileDown },
         { href: "/activity", label: "Activity", icon: Activity },
       ],
@@ -98,8 +90,8 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
 
 const workerItems: NavItem[] = [
   { href: "/me", label: "Compliance", icon: Shield },
+  { href: "/audits", label: "Audits", icon: ClipboardCheck },
   { href: "/me/documents", label: "Documents", icon: BadgeCheck },
-  { href: "/me/courses", label: "My courses", icon: GraduationCap },
 ]
 
 function isActive(pathname: string, href: string) {
@@ -141,10 +133,14 @@ function NavGroup({
   label,
   items,
   pathname,
+  extra,
+  empty,
 }: {
   label: string
   items: NavItem[]
   pathname: string
+  extra?: React.ReactNode
+  empty?: React.ReactNode
 }) {
   const { state } = useSidebar()
   const containsActive = items.some((item) => isActive(pathname, item.href))
@@ -162,27 +158,35 @@ function NavGroup({
 
   return (
     <Collapsible open={shown} onOpenChange={onOpenChange}>
-      <SidebarGroup className="py-1">
-        <CollapsibleTrigger className="group/label flex h-6 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[11px] font-normal text-muted-foreground outline-none group-data-[collapsible=icon]:hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-          <span className="flex size-4 shrink-0 items-center justify-center">
-            <ChevronRight
-              className={cn(
-                "size-3 transition-transform duration-150",
-                open && "rotate-90",
-                open ? "opacity-0 group-hover/label:opacity-100" : "opacity-100"
-              )}
-            />
-          </span>
-          <span>{label}</span>
-        </CollapsibleTrigger>
+      <SidebarGroup className="group/label py-1">
+        <div className="flex h-6 items-center pr-1 group-data-[collapsible=icon]:hidden">
+          <CollapsibleTrigger className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[11px] font-normal text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <ChevronRight
+                className={cn(
+                  "size-3 transition-transform duration-150",
+                  open && "rotate-90",
+                  open ? "opacity-0 group-hover/label:opacity-100" : "opacity-100"
+                )}
+              />
+            </span>
+            <span className="truncate">{label}</span>
+          </CollapsibleTrigger>
+          {extra}
+        </div>
         <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0">
           <SidebarGroupContent>
-            <NavMenu items={items} pathname={pathname} />
+            {items.length > 0 ? <NavMenu items={items} pathname={pathname} /> : empty}
           </SidebarGroupContent>
         </CollapsibleContent>
       </SidebarGroup>
     </Collapsible>
   )
+}
+
+function NavIcon({ icon: Icon }: { icon?: LucideIcon }) {
+  if (!Icon) return null
+  return <Icon />
 }
 
 function NavMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
@@ -194,7 +198,7 @@ function NavMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
             isActive={isActive(pathname, item.href)}
             render={<Link href={item.href} />}
           >
-            <item.icon />
+            <NavIcon icon={item.icon} />
             <span>{item.label}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -308,14 +312,45 @@ export function WorkspaceHeader({
   )
 }
 
-export function AppNav({ admin }: { admin: boolean }) {
+export function AppNav({
+  admin,
+  chats,
+}: {
+  admin: boolean
+  chats: AssistantChatLink[]
+}) {
   const pathname = usePathname()
 
   if (!admin) {
+    const [home, ...rest] = workerItems
     return (
       <SidebarGroup className="py-1">
         <SidebarGroupContent>
-          <NavMenu items={workerItems} pathname={pathname} />
+          <SidebarMenu>
+            {home ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isActive(pathname, home.href)}
+                  render={<Link href={home.href} />}
+                >
+                  <NavIcon icon={home.icon} />
+                  <span>{home.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
+            <AssistantNav chats={chats} pathname={pathname} />
+            {rest.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  isActive={isActive(pathname, item.href)}
+                  render={<Link href={item.href} />}
+                >
+                  <NavIcon icon={item.icon} />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
     )
@@ -323,22 +358,36 @@ export function AppNav({ admin }: { admin: boolean }) {
 
   return (
     <>
-      {adminGroups().map((group) =>
-        group.label ? (
-          <NavGroup
-            key={group.label}
-            label={group.label}
-            items={group.items}
-            pathname={pathname}
-          />
-        ) : (
-          <SidebarGroup key="home" className="py-1">
-            <SidebarGroupContent>
-              <NavMenu items={group.items} pathname={pathname} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )
-      )}
+      {adminGroups().map((group) => (
+        <Fragment key={group.label ?? "home"}>
+          {group.label ? (
+            <NavGroup
+              label={group.label}
+              items={group.items}
+              pathname={pathname}
+            />
+          ) : (
+            <SidebarGroup className="py-1">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        isActive={isActive(pathname, item.href)}
+                        render={<Link href={item.href} />}
+                      >
+                        <NavIcon icon={item.icon} />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                  <AssistantNav chats={chats} pathname={pathname} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+        </Fragment>
+      ))}
     </>
   )
 }
@@ -365,7 +414,7 @@ export function AppFooterNav({ admin }: { admin: boolean }) {
                 }
                 render={<Link href={item.href} />}
               >
-                <item.icon />
+                <NavIcon icon={item.icon} />
                 <span>{item.label}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>

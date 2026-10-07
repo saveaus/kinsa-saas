@@ -1,8 +1,13 @@
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import {
+  asEvidenceArea,
+  builtInEmoji,
   builtInLogOrder,
+  logDateFields,
   type BuiltInLog,
+  type EvidenceArea,
+  type LogDateField,
   type LogScope,
   type LogSubject,
 } from "@/modules/logs/standing"
@@ -18,6 +23,10 @@ export type LogRegister = {
   worker_id: string | null
   built_in: BuiltInLog | null
   personName: string | null
+  emoji: string
+  evidenceArea: EvidenceArea | null
+  dateFields: LogDateField[]
+  templateKey: string | null
 }
 
 export type LogEntryRow = {
@@ -36,7 +45,7 @@ export type LogEntryRow = {
 }
 
 const registerColumns =
-  "id, name, slug, visible, scope, subject, participant_id, worker_id, built_in"
+  "id, name, slug, visible, scope, subject, participant_id, worker_id, built_in, emoji, evidence_area, date_fields, template_key"
 
 export async function listLogRegisters(context: TenantContext) {
   const supabase = await createServerSupabase()
@@ -56,10 +65,7 @@ export async function listGlobalLogs(context: TenantContext) {
     const log = global.find((item) => item.built_in === key)
     return log ? [log] : []
   })
-  const custom = global
-    .filter((log) => log.built_in === null)
-    .sort((left, right) => left.name.localeCompare(right.name))
-  return [...builtIn, ...custom]
+  return builtIn
 }
 
 export async function getLogRegisterBySlug(
@@ -75,7 +81,7 @@ export async function getLogRegisterBySlug(
     .maybeSingle()
 
   if (error) throw new Error(error.message)
-  if (!data || data.built_in) return null
+  if (!data) return null
   const [named] = await withPersonNames([data])
   return named ?? null
 }
@@ -111,6 +117,95 @@ export async function listLogEntries(
 
   if (error) throw new Error(error.message)
   return withEntryNames(data ?? [])
+}
+
+export type EvidenceEntry = {
+  id: string
+  summary: string
+  occurredOn: string
+  extraDates: { label: string; occurredOn: string }[]
+  people: string
+  files: string
+}
+
+export async function listEvidenceEntries(
+  context: TenantContext,
+  registerId: string
+): Promise<EvidenceEntry[]> {
+  const entries = await listLogEntries(context, registerId)
+  if (entries.length === 0) return []
+  const ids = entries.map((entry) => entry.id)
+  const supabase = await createServerSupabase()
+  const [peopleResult, filesResult, datesResult] = await Promise.all([
+    supabase
+      .from("log_entry_people")
+      .select("entry_id, participant_id, worker_id")
+      .eq("organisation_id", context.organisationId)
+      .in("entry_id", ids),
+    supabase
+      .from("log_entry_files")
+      .select("entry_id, original_filename")
+      .eq("organisation_id", context.organisationId)
+      .in("entry_id", ids),
+    supabase
+      .from("log_entry_dates")
+      .select("entry_id, label, occurred_on")
+      .eq("organisation_id", context.organisationId)
+      .in("entry_id", ids),
+  ])
+  if (peopleResult.error) throw new Error(peopleResult.error.message)
+  if (filesResult.error) throw new Error(filesResult.error.message)
+  if (datesResult.error) throw new Error(datesResult.error.message)
+
+  const participantIds = (peopleResult.data ?? []).flatMap((row) =>
+    row.participant_id ? [row.participant_id] : []
+  )
+  const workerIds = (peopleResult.data ?? []).flatMap((row) =>
+    row.worker_id ? [row.worker_id] : []
+  )
+  const names = new Map<string, string>()
+  if (participantIds.length > 0) {
+    const { data, error } = await supabase
+      .from("participants")
+      .select("id, name")
+      .in("id", participantIds)
+    if (error) throw new Error(error.message)
+    for (const person of data ?? []) names.set(person.id, person.name)
+  }
+  if (workerIds.length > 0) {
+    const { data, error } = await supabase
+      .from("workers")
+      .select("id, first_name, last_name")
+      .in("id", workerIds)
+    if (error) throw new Error(error.message)
+    for (const worker of data ?? []) {
+      names.set(worker.id, `${worker.first_name} ${worker.last_name}`)
+    }
+  }
+
+  return entries.map((entry) => {
+    const people = (peopleResult.data ?? []).flatMap((row) => {
+      if (row.entry_id !== entry.id) return []
+      const id = row.participant_id ?? row.worker_id
+      return id ? [names.get(id) ?? "Person"] : []
+    })
+    const extraFiles = (filesResult.data ?? []).flatMap((row) =>
+      row.entry_id === entry.id ? [row.original_filename] : []
+    )
+    const extraDates = (datesResult.data ?? []).flatMap((row) =>
+      row.entry_id === entry.id
+        ? [{ label: row.label, occurredOn: row.occurred_on }]
+        : []
+    )
+    return {
+      id: entry.id,
+      summary: entry.summary,
+      occurredOn: entry.occurred_on,
+      extraDates,
+      people: people.join(", ") || "—",
+      files: [entry.original_filename, ...extraFiles].join(", "),
+    }
+  })
 }
 
 export async function listPersonLogEntries(
@@ -151,11 +246,22 @@ export async function getLogEntry(context: TenantContext, entryId: string) {
 
 type RegisterRow = Omit<
   LogRegister,
-  "personName" | "scope" | "subject" | "built_in"
+  | "personName"
+  | "scope"
+  | "subject"
+  | "built_in"
+  | "emoji"
+  | "evidenceArea"
+  | "dateFields"
+  | "templateKey"
 > & {
   scope: string
   subject: string
   built_in: string | null
+  emoji: string
+  evidence_area: string | null
+  date_fields: unknown
+  template_key: string | null
 }
 
 async function withPersonNames(rows: RegisterRow[]) {
@@ -209,6 +315,10 @@ async function withPersonNames(rows: RegisterRow[]) {
         scope,
         subject,
         built_in: builtIn,
+        emoji: row.emoji || (builtIn ? builtInEmoji(builtIn) : "📋"),
+        evidenceArea: asEvidenceArea(row.evidence_area),
+        dateFields: logDateFields(row.date_fields),
+        templateKey: row.template_key,
         personName: row.participant_id
           ? (people.get(row.participant_id) ?? null)
           : row.worker_id

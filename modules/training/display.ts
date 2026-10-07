@@ -10,6 +10,23 @@ export function enrolmentStatusLabel(status: string) {
   return "Not started"
 }
 
+export function sectionStates(
+  sections: Array<{ start: number }>,
+  stepIndex: number,
+  status: string
+) {
+  if (status === "completed") return sections.map(() => "done" as const)
+  if (status === "assigned" && stepIndex <= 0) {
+    return sections.map(() => "upcoming" as const)
+  }
+  return sections.map((section, index) => {
+    const next = sections[index + 1]?.start
+    if (next != null && stepIndex >= next) return "done" as const
+    if (stepIndex >= section.start) return "current" as const
+    return "upcoming" as const
+  })
+}
+
 export function lessonPercent(reached: number, steps: number, status: string) {
   if (status === "completed") return 100
   if (steps <= 0) return 0
@@ -46,6 +63,75 @@ export const courseFamilyOrder = [
 export function courseFamily(code: string | null) {
   if (!code) return "Other"
   return FAMILIES[code.split("-")[0]] ?? "Other"
+}
+
+const FORMAT_FAMILIES = new Set(["Bites", "Checkpoints", "Resource hubs"])
+
+export function courseTopic(code: string | null, parentCode: string | null) {
+  const family = courseFamily(code)
+  if (!FORMAT_FAMILIES.has(family)) return family
+  const parent = courseFamily(parentCode)
+  return parent === "Other" ? family : parent
+}
+
+export const learningGroupOrder = [
+  "All staff",
+  "Support workers",
+  "Leaders",
+  "Role-specific",
+] as const
+
+export type LearningGroup = (typeof learningGroupOrder)[number]
+
+function inheritedAudience(audience: string) {
+  const text = audience.trim().toLowerCase()
+  return text === "as per parent course" || text === "workers due for this refresher"
+}
+
+export function learningGroup(
+  audience: string | null,
+  parentAudience: string | null = null
+): LearningGroup {
+  const text = (audience ?? "").trim()
+  if (!text || inheritedAudience(text)) {
+    if (parentAudience && !inheritedAudience(parentAudience)) {
+      return learningGroup(parentAudience, null)
+    }
+    return "Role-specific"
+  }
+  const lower = text.toLowerCase()
+  if (lower.includes("all staff")) return "All staff"
+  if (lower.startsWith("role-specific")) return "Role-specific"
+  if (
+    lower.includes("early childhood") ||
+    lower.includes("coordinator") ||
+    lower.includes("behaviour") ||
+    lower.includes("epilepsy") ||
+    lower.includes("medication") ||
+    lower.includes("sda")
+  ) {
+    return "Role-specific"
+  }
+  if (lower.includes("support worker")) return "Support workers"
+  if (
+    lower.includes("leader") ||
+    lower.includes("governance") ||
+    lower.includes("office") ||
+    lower.includes("intake")
+  ) {
+    return "Leaders"
+  }
+  return "Role-specific"
+}
+
+export const courseLengthOrder = ["Short", "Medium", "Long"] as const
+
+export type CourseLength = (typeof courseLengthOrder)[number]
+
+export function courseLengthLabel(steps: number): CourseLength {
+  if (steps <= 6) return "Short"
+  if (steps <= 16) return "Medium"
+  return "Long"
 }
 
 export function courseKindLabel(kind: string) {

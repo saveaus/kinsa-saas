@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
           </ActionForm>
           <p className="text-sm text-muted-foreground">
             Remembered it?{" "}
-            <Link href="/login" className="underline">
+            <Link href="/login" className="text-primary underline">
               Sign in
             </Link>
           </p>

@@ -22,7 +22,7 @@ export function SignupPanel() {
       aside={
         <p>
           Already have an account?{" "}
-          <Link href="/login" className="text-foreground underline underline-offset-2">
+          <Link href="/login" className="text-primary underline underline-offset-2">
             Sign in
           </Link>
         </p>
