@@ -4,6 +4,7 @@ import test from "node:test"
 import {
   allowsRegistered,
   billedSeats,
+  planAmount,
   trialDaysRemaining,
   type BillingSnapshot,
 } from "@/modules/billing/access"
@@ -86,6 +87,11 @@ test("billing stays open when Stripe is not configured", () => {
 test("trial days remaining counts the last partial day", () => {
   assert.equal(trialDaysRemaining("2026-10-04T12:00:00.000Z", now), 1)
   assert.equal(trialDaysRemaining("2026-10-03T00:00:00.000Z", now), 0)
+})
+
+test("plans are priced per active worker", () => {
+  assert.equal(planAmount("staff"), 8)
+  assert.equal(planAmount("registered"), 12)
 })
 
 test("billed seats are at least one", () => {

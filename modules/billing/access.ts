@@ -40,9 +40,9 @@ export function isBillingStatus(value: unknown): value is BillingStatus {
 export function planAmount(plan: BillingPlan) {
   switch (plan) {
     case "staff":
-      return 12
+      return 8
     case "registered":
-      return 15
+      return 12
     default: {
       const unreachable: never = plan
       return unreachable

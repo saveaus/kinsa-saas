@@ -38,9 +38,9 @@ function planFeatures(plan: BillingPlan) {
     case "registered":
       return [
         "Everything in Staff",
-        "Policies and participants",
-        "Evidence packs and the activity log",
-        "Automatic emails",
+        "Policies, participants, and support-plan checks",
+        "Incident, complaint, risk, and restrictive-practice registers",
+        "Evidence packs, internal audits, reports, and reminder emails",
       ]
     default: {
       const unreachable: never = plan

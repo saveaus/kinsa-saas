@@ -4,6 +4,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin"
 import {
   billedSeats,
   isBillingPlan,
+  planAmount,
   type BillingPlan,
   type BillingStatus,
 } from "@/modules/billing/access"
@@ -24,16 +25,7 @@ export function stripeClient() {
 }
 
 function planAmountCents(plan: BillingPlan) {
-  switch (plan) {
-    case "staff":
-      return 1200
-    case "registered":
-      return 1500
-    default: {
-      const unreachable: never = plan
-      return unreachable
-    }
-  }
+  return planAmount(plan) * 100
 }
 
 function planProductName(plan: BillingPlan) {
@@ -49,6 +41,15 @@ function planProductName(plan: BillingPlan) {
   }
 }
 
+function priceMatches(price: Stripe.Price, plan: BillingPlan) {
+  return (
+    price.unit_amount === planAmountCents(plan) &&
+    price.currency === "aud" &&
+    price.recurring?.interval === "month" &&
+    price.active
+  )
+}
+
 export async function ensurePlanPrice(stripe: Stripe, plan: BillingPlan) {
   const lookupKey = LOOKUP[plan]
   const existing = await stripe.prices.list({
@@ -57,16 +58,21 @@ export async function ensurePlanPrice(stripe: Stripe, plan: BillingPlan) {
     limit: 1,
   })
   const current = existing.data[0]
-  if (current?.id && typeof current.product === "string") {
-    return { priceId: current.id, productId: current.product }
+  const currentProductId = typeof current?.product === "string" ? current.product : null
+  if (current?.id && currentProductId && priceMatches(current, plan)) {
+    return { priceId: current.id, productId: currentProductId }
   }
 
-  const product = await stripe.products.create({
-    name: planProductName(plan),
-    metadata: { plan },
-  })
+  const productId =
+    currentProductId ??
+    (
+      await stripe.products.create({
+        name: planProductName(plan),
+        metadata: { plan },
+      })
+    ).id
   const price = await stripe.prices.create({
-    product: product.id,
+    product: productId,
     currency: "aud",
     unit_amount: planAmountCents(plan),
     recurring: { interval: "month" },
@@ -74,7 +80,10 @@ export async function ensurePlanPrice(stripe: Stripe, plan: BillingPlan) {
     transfer_lookup_key: true,
     metadata: { plan },
   })
-  return { priceId: price.id, productId: product.id }
+  if (current?.id && current.id !== price.id) {
+    await stripe.prices.update(current.id, { active: false })
+  }
+  return { priceId: price.id, productId }
 }
 
 export async function checkoutUrl(input: {
@@ -125,19 +134,51 @@ export async function checkoutUrl(input: {
 }
 
 async function portalConfiguration(stripe: Stripe) {
-  const listed = await stripe.billingPortal.configurations.list({
-    active: true,
-    limit: 10,
-  })
-  const existing = listed.data.find(
-    (item) => item.metadata?.kinsa === "billing"
-  )
-  if (existing) return existing.id
-
   const [staff, registered] = await Promise.all([
     ensurePlanPrice(stripe, "staff"),
     ensurePlanPrice(stripe, "registered"),
   ])
+  const products = [
+    {
+      product: staff.productId,
+      prices: [staff.priceId],
+      adjustable_quantity: { enabled: false },
+    },
+    {
+      product: registered.productId,
+      prices: [registered.priceId],
+      adjustable_quantity: { enabled: false },
+    },
+  ]
+
+  const listed = await stripe.billingPortal.configurations.list({
+    active: true,
+    limit: 10,
+    expand: ["data.features.subscription_update.products"],
+  })
+  const existing = listed.data.find(
+    (item) => item.metadata?.kinsa === "billing"
+  )
+  if (existing) {
+    const saved = existing.features.subscription_update.products ?? []
+    const currentIds = saved.flatMap((item) => item.prices)
+    const nextIds = products.flatMap((item) => item.prices)
+    const same =
+      currentIds.length === nextIds.length &&
+      nextIds.every((id) => currentIds.includes(id))
+    if (!same) {
+      await stripe.billingPortal.configurations.update(existing.id, {
+        features: {
+          subscription_update: {
+            enabled: true,
+            default_allowed_updates: ["price"],
+            products,
+          },
+        },
+      })
+    }
+    return existing.id
+  }
 
   const created = await stripe.billingPortal.configurations.create({
     metadata: { kinsa: "billing" },
@@ -154,10 +195,7 @@ async function portalConfiguration(stripe: Stripe) {
       subscription_update: {
         enabled: true,
         default_allowed_updates: ["price"],
-        products: [
-          { product: staff.productId, prices: [staff.priceId] },
-          { product: registered.productId, prices: [registered.priceId] },
-        ],
+        products,
       },
     },
   })
