@@ -628,7 +628,7 @@ function Composer({
         })
       }}
     >
-      <div className="rounded-[1.75rem] border bg-background px-3 py-2 shadow-sm">
+      <div className="rounded-[1.75rem] border bg-background px-2 pt-1 pb-1.5 shadow-sm">
         <Textarea
           value={input}
           onChange={(event) => setInput(event.target.value)}
@@ -642,7 +642,7 @@ function Composer({
           disabled={busy}
           rows={1}
           aria-label="Message"
-          className="min-h-12 resize-none border-0 bg-transparent px-2 py-1.5 text-base shadow-none focus-visible:ring-0 md:text-base"
+          className="max-h-40 min-h-0 resize-none border-0 bg-transparent px-2 py-1.5 text-base leading-6 shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"
         />
         <div className="flex items-center justify-between">
           {allowFiles ? (
@@ -650,7 +650,7 @@ function Composer({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 className="rounded-full"
                 aria-label="Attach a staff list or certificates"
                 disabled={busy}
