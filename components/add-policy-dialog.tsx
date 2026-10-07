@@ -21,12 +21,17 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select"
 import type { PracticeStandard } from "@/lib/ndis-practice-standards"
+import { policyAttachmentAccept } from "@/modules/policies/attachments"
 import { createPolicyAction } from "@/modules/policies/actions"
 
 export function AddPolicyDialog({
   groups,
+  fileId,
+  fileName,
 }: {
   groups: { module: string; standards: PracticeStandard[] }[]
+  fileId: string
+  fileName: string
 }) {
   const [open, setOpen] = useState(false)
 
@@ -40,8 +45,8 @@ export function AddPolicyDialog({
         <DialogHeader>
           <DialogTitle>Add policy</DialogTitle>
           <DialogDescription>
-            Attach the file and choose the practice standard. A draft does not
-            count until someone accepts it.
+            Attach the policy and choose the practice standard. It is added to{" "}
+            {fileName}. A draft does not count until someone accepts it.
           </DialogDescription>
         </DialogHeader>
         <ActionForm
@@ -54,6 +59,7 @@ export function AddPolicyDialog({
             <Label htmlFor="policy_name">Name</Label>
             <Input id="policy_name" name="name" required maxLength={160} />
           </div>
+          <input type="hidden" name="file_id" value={fileId} />
           <div className="grid gap-1.5">
             <Label htmlFor="standard_code">Practice standard</Label>
             <NativeSelect
@@ -85,12 +91,12 @@ export function AddPolicyDialog({
             <Input id="review_on" name="review_on" type="date" required />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="policy_file">File</Label>
+            <Label htmlFor="policy_file">Attachment</Label>
             <Input
               id="policy_file"
               name="file"
               type="file"
-              accept="application/pdf,image/jpeg,image/png"
+              accept={policyAttachmentAccept}
               required
             />
           </div>

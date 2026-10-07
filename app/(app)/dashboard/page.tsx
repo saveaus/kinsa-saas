@@ -9,6 +9,8 @@ import { EmptyState } from "@/components/empty-state"
 import { buttonVariants } from "@/components/ui/button"
 import { can, requireTenant } from "@/lib/tenant"
 import { loadAuditPack } from "@/modules/audit-pack/load"
+import { loginPromptSuggestions } from "@/modules/assistant/login-prompts"
+import { packGaps } from "@/modules/audit-pack/score"
 import { dashboardReports } from "@/modules/analytics/reports"
 import { allowsRegistered } from "@/modules/billing/access"
 import { getOrganisationBilling } from "@/modules/billing/queries"
@@ -32,9 +34,10 @@ export default async function DashboardPage({
 
   const billing = await getOrganisationBilling(context.organisationId)
   if (!allowsRegistered(billing, new Date(), stripeConfigured())) {
+    const suggestions = await loginPromptSuggestions(context)
     return (
       <div className="grid gap-6">
-        <AssistantPrompt />
+        <AssistantPrompt suggestions={suggestions} />
         <EmptyState
           title="The evidence pack is part of Registered"
           description="Worker records stay available on this plan."
@@ -56,6 +59,10 @@ export default async function DashboardPage({
     getLapsingWindowDays(context),
   ])
   const pack = await loadAuditPack(context, workforce, lapsingWindowDays)
+  const suggestions = await loginPromptSuggestions(
+    context,
+    packGaps(pack.items).slice(0, 8).map((item) => item.label)
+  )
   const reports = dashboardReports(pack.items)
   const showAll = params.check === "all"
   const showWelcome =
@@ -65,7 +72,7 @@ export default async function DashboardPage({
   return (
     <div className="grid gap-6">
       {showAll ? <BackLink href="/dashboard" /> : null}
-      <AssistantPrompt />
+      <AssistantPrompt suggestions={suggestions} />
       {showWelcome ? (
         <section className="grid gap-3 rounded-lg border bg-card p-4">
           <div>

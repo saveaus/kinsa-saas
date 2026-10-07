@@ -52,7 +52,7 @@ export function interviewInstructions(input: {
     input.policyOnFile
       ? "An accepted policy is on file for this criterion. You may ask how it is used. Do not assume it is followed."
       : "No accepted policy is on file for this criterion. You may ask whether one exists.",
-    "When you have enough to rate the criterion, call record_assessment with met, partial, or not_met and a short summary of what you heard. Then tell the person the rating in plain language and what to improve.",
+    "When you have enough to rate the criterion, call record_assessment with met, partial, or not_met and a short summary of what you heard. The rating is not saved until they press Confirm. Then tell the person the rating in plain language and what to improve.",
     "met means this is in place. partial means some of it is in place. not_met means it is missing or not working.",
   ]
   if (input.priorPhrases.length > 0) {

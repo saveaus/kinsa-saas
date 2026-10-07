@@ -3,6 +3,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 
 import { EmptyState } from "@/components/empty-state"
+import { AuditScope } from "@/components/audit-scope"
 import { StartInternalAuditDialog } from "@/components/start-internal-audit"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
@@ -12,6 +13,7 @@ import { allowsRegistered } from "@/modules/billing/access"
 import { getOrganisationBilling } from "@/modules/billing/queries"
 import { stripeConfigured } from "@/modules/billing/stripe"
 import { listInternalAudits } from "@/modules/internal-audits/queries"
+import { auditCatalogue } from "@/lib/audit-catalogue"
 
 export default async function InternalAuditsPage() {
   const { context } = await requireTenant()
@@ -36,6 +38,8 @@ export default async function InternalAuditsPage() {
     listInternalAudits(context),
     canReview ? listInternalAuditReviews(context) : Promise.resolve([]),
   ])
+
+  const modules = auditCatalogue(context.organisationRegistrationGroups)
 
   const actions = (
     <div className="flex flex-wrap justify-center gap-2">
@@ -78,12 +82,15 @@ export default async function InternalAuditsPage() {
       )
     }
     return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="No internal audits yet"
-        description="Start a run and assign criteria, or review the open evidence with the assistant."
-        action={actions}
-      />
+      <div className="grid gap-6">
+        <AuditScope modules={modules} />
+        <EmptyState
+          icon={<ClipboardCheck className="size-4" />}
+          title="No internal audits yet"
+          description="Start a run and assign the criteria, or review every one of them with the assistant."
+          action={actions}
+        />
+      </div>
     )
   }
 
@@ -93,6 +100,7 @@ export default async function InternalAuditsPage() {
         <h1 className="text-sm font-medium">Internal audits</h1>
         {actions}
       </div>
+      <AuditScope modules={modules} />
       {reviews.length > 0 ? (
         <section className="grid gap-2">
           <h2 className="text-sm text-muted-foreground">Reviews</h2>

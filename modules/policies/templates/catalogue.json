@@ -1,0 +1,534 @@
+[
+  {
+    "key": "all-01",
+    "name": "NDIS Code of Conduct Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.governance",
+    "verificationStandardCode": "verification.human-resources"
+  },
+  {
+    "key": "all-02",
+    "name": "Worker Screening Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.human-resources",
+    "verificationStandardCode": "verification.human-resources"
+  },
+  {
+    "key": "all-03",
+    "name": "Incident Management and Reportable Incidents Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.incidents",
+    "verificationStandardCode": "verification.incidents"
+  },
+  {
+    "key": "all-04",
+    "name": "Feedback, Complaints Management and Resolution Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.complaints",
+    "verificationStandardCode": "verification.complaints"
+  },
+  {
+    "key": "all-05",
+    "name": "Notifiable Events and Change of Ownership Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.governance",
+    "verificationStandardCode": "verification.risk"
+  },
+  {
+    "key": "all-06",
+    "name": "Conflict of Interest Policy and Procedure",
+    "category": "all",
+    "standardCode": "core.governance",
+    "verificationStandardCode": "verification.risk"
+  },
+  {
+    "key": "ver-01",
+    "name": "Human Resource Management Policy and Procedure (Verification)",
+    "category": "verification",
+    "standardCode": "verification.human-resources",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "ver-02",
+    "name": "Risk Management Policy and Procedure (Verification)",
+    "category": "verification",
+    "standardCode": "verification.risk",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-06",
+    "name": "Person-Centred Supports Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.person-centred",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-07",
+    "name": "Individual Values and Beliefs Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.values",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-08",
+    "name": "Privacy and Dignity Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.privacy",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-09",
+    "name": "Independence and Informed Choice Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.choice",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-10",
+    "name": "Violence, Abuse, Neglect, Exploitation and Discrimination Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.violence",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-11",
+    "name": "Governance and Operational Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.governance",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-12",
+    "name": "Risk Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.risk",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-13",
+    "name": "Quality Management and Continuous Improvement Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.quality",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-14",
+    "name": "Information Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.information",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-17",
+    "name": "Human Resource Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.human-resources",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-18",
+    "name": "Continuity of Supports Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.continuity",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-18a",
+    "name": "Emergency and Disaster Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.continuity",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-19",
+    "name": "Access to Supports Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.access",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-20",
+    "name": "Support Planning Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.support-planning",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-21",
+    "name": "Service Agreements with Participants Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.service-agreements",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-22",
+    "name": "Responsive Support Provision Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.responsive",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-23",
+    "name": "Transitions to or from a Provider Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.transitions",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-24",
+    "name": "Safe Environment and Infection Prevention Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.safe-environment",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-25",
+    "name": "Participant Money and Property Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.money",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-26",
+    "name": "Medication Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.medication",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-26a",
+    "name": "Mealtime Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.mealtime",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "core-27",
+    "name": "Waste Management Policy and Procedure",
+    "category": "core",
+    "standardCode": "core.waste",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-47",
+    "name": "Behaviour Support in the NDIS (Implementing Providers) Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.ndis",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-48",
+    "name": "Regulated Restrictive Practices Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.restrictive",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-49",
+    "name": "Supporting the Assessment and Development of Behaviour Support Plans Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.assessment",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-50",
+    "name": "Behaviour Support Plan Implementation Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.implementation",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-51",
+    "name": "Monitoring and Reporting the Use of Regulated Restrictive Practices Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.reporting",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-52",
+    "name": "Behaviour Support Plan Review (Implementing Providers) Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.monitoring",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-53",
+    "name": "Reportable Incidents Involving Restrictive Practices (Implementing Providers) Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.incidents",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2a-54",
+    "name": "Interim Behaviour Support Plans (Implementing Providers) Policy and Procedure",
+    "category": "implementing",
+    "standardCode": "ibs.interim",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-28",
+    "name": "High Intensity Daily Personal Activities Framework Policy and Procedure",
+    "category": "0104",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-29",
+    "name": "Complex Bowel Care Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.bowel",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-30",
+    "name": "Enteral Feeding and Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.enteral",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-30a",
+    "name": "Severe Dysphagia Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.dysphagia",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-31",
+    "name": "Tracheostomy Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.tracheostomy",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-32",
+    "name": "Urinary Catheter Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.catheter",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-33",
+    "name": "Ventilator Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.ventilator",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-34",
+    "name": "Subcutaneous Injections Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.injections",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-35",
+    "name": "Complex Wound Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": "hi.wound",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m1-sz",
+    "name": "High Risk of Seizure (Epilepsy) Management Policy and Procedure",
+    "category": "0104",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "g0107-sw",
+    "name": "Sole Worker Supports for Participants Living Alone Policy and Procedure",
+    "category": "0107",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-38",
+    "name": "Behaviour Support in the NDIS Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.ndis",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-39",
+    "name": "Restrictive Practices (Specialist Behaviour Support) Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.restrictive",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-40",
+    "name": "Functional Behaviour Assessments and Behaviour Support Plans Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.plans",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-41",
+    "name": "Supporting the Implementation of the Behaviour Support Plan Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.implementation",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-42",
+    "name": "Behaviour Support Plan Monitoring and Review Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.monitoring",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-43",
+    "name": "Reportable Incidents Involving the Use of a Restrictive Practice (Specialist) Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.incidents",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m2-44",
+    "name": "Interim Behaviour Support Plans Policy and Procedure",
+    "category": "0110",
+    "standardCode": "sbs.interim",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-56",
+    "name": "The Child Policy and Procedure",
+    "category": "0118",
+    "standardCode": "ec.child",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-57",
+    "name": "The Family Policy and Procedure",
+    "category": "0118",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-58",
+    "name": "Inclusion Policy and Procedure",
+    "category": "0118",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-59",
+    "name": "Collaboration Policy and Procedure",
+    "category": "0118",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-60",
+    "name": "Capacity Building Policy and Procedure",
+    "category": "0118",
+    "standardCode": "ec.capacity",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-61",
+    "name": "Evidence-Informed Practice Policy and Procedure",
+    "category": "0118",
+    "standardCode": "ec.evidence",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m3-62",
+    "name": "Outcome Based Approach Policy and Procedure",
+    "category": "0118",
+    "standardCode": "ec.outcomes",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5-68",
+    "name": "SDA Rights and Responsibilities Policy and Procedure",
+    "category": "0131",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5-69",
+    "name": "SDA Conflict of Interest Policy and Procedure",
+    "category": "0131",
+    "standardCode": "sda.conflict",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5-70",
+    "name": "SDA Service Agreements with Participants Policy and Procedure",
+    "category": "0131",
+    "standardCode": "sda.agreements",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5-71",
+    "name": "Enrolment of SDA Properties Policy and Procedure",
+    "category": "0131",
+    "standardCode": "sda.enrolment",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5-72",
+    "name": "SDA Tenancy Management Policy and Procedure",
+    "category": "0131",
+    "standardCode": "sda.tenancy",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m4-64",
+    "name": "Specialised Support Coordination Policy and Procedure",
+    "category": "0132",
+    "standardCode": "sc.coordination",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m4-65",
+    "name": "Management of a Participant's NDIS Supports Policy and Procedure",
+    "category": "0132",
+    "standardCode": "sc.management",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m4-66",
+    "name": "Conflict of Interest (Specialised Support Coordination) Policy and Procedure",
+    "category": "0132",
+    "standardCode": "sc.conflict",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "g0137-dp",
+    "name": "NDIS Digital Platform Services Policy and Procedure",
+    "category": "0137",
+    "standardCode": null,
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5a-72b",
+    "name": "Supported Decision-Making (SIL) Policy and Procedure",
+    "category": "0138",
+    "standardCode": "sil.module",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5a-72c",
+    "name": "Safeguarding (SIL) Policy and Procedure",
+    "category": "0138",
+    "standardCode": "sil.module",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5a-72d",
+    "name": "Practice Governance (SIL) Policy and Procedure",
+    "category": "0138",
+    "standardCode": "sil.module",
+    "verificationStandardCode": null
+  },
+  {
+    "key": "m5a-72e",
+    "name": "Agreements about Tenancy, Housing and Support Arrangements (SIL) Policy and Procedure",
+    "category": "0138",
+    "standardCode": "sil.module",
+    "verificationStandardCode": null
+  }
+]

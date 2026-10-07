@@ -35,10 +35,12 @@ export function AttioReport({
   report,
   height = 168,
   href,
+  flow = false,
 }: {
   report: ReportModel
   height?: number
   href?: string
+  flow?: boolean
 }) {
   const title = href ? (
     <Link href={href} className="hover:underline">
@@ -48,7 +50,7 @@ export function AttioReport({
     report.title
   )
 
-  const contained = report.chart === "breakdown"
+  const contained = report.chart === "breakdown" && !flow
   const section = (
     <section
       id={report.id}

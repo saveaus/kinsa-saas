@@ -401,6 +401,9 @@ export type Database = {
           mime_type: string | null
           file_size_bytes: number | null
           drafted_by: PolicyDrafter
+          template_key: string | null
+          category: string | null
+          file_id: string | null
           created_by: string | null
           accepted_by: string | null
           accepted_at: string | null
@@ -420,6 +423,9 @@ export type Database = {
           mime_type?: string | null
           file_size_bytes?: number | null
           drafted_by?: PolicyDrafter
+          template_key?: string | null
+          category?: string | null
+          file_id?: string | null
           created_by?: string | null
           accepted_by?: string | null
           accepted_at?: string | null
@@ -448,6 +454,28 @@ export type Database = {
         }
         Update: {
           acknowledged_at?: string
+        }
+        Relationships: []
+      }
+      policy_files: {
+        Row: {
+          id: string
+          organisation_id: string
+          category: string
+          name: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          category: string
+          name: string
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
         }
         Relationships: []
       }
@@ -1103,6 +1131,10 @@ export type Database = {
       peek_invite: {
         Args: { p_token_hash: string }
         Returns: { email: string; expires_at: string }[]
+      }
+      move_policy_to_file: {
+        Args: { p_policy_id: string; p_file_id: string }
+        Returns: undefined
       }
       record_audit: {
         Args: {

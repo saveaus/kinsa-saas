@@ -48,7 +48,7 @@ export function AssistantImport({
   const certificatesReady = certificateList.every((item) => item.workerId && item.typeId)
   const ready = staff ? staff.people.length > 0 : certificatesReady
   return (
-    <div className="mb-3 rounded-2xl border bg-background p-3">
+    <div className="mb-3 rounded-2xl border bg-card p-3 shadow-sm">
       {staff ? (
         <div className="grid gap-2">
           <p className="text-sm">

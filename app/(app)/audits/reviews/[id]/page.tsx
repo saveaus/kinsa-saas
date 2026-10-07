@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import { AssistantChat } from "@/components/assistant-chat"
 import { EmptyState } from "@/components/empty-state"
 import { buttonVariants } from "@/components/ui/button"
+import { registrationGroupChoices } from "@/lib/ndis-registration-groups"
 import { can, requireTenant } from "@/lib/tenant"
 import { getAssistantChat } from "@/modules/assistant/chats"
 import { allowsRegistered } from "@/modules/billing/access"
@@ -60,5 +61,11 @@ export default async function InternalAuditReviewPage({
 
   const chat = await getAssistantChat(context, id)
   if (!chat || chat.purpose !== "internal_audit") notFound()
-  return <AssistantChat chat={chat} mode="internal_audit" />
+  return (
+    <AssistantChat
+      chat={chat}
+      mode="internal_audit"
+      auditChoices={registrationGroupChoices(context.organisationRegistrationGroups)}
+    />
+  )
 }

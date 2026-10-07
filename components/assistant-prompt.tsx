@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { stashAssistantDraft } from "@/modules/assistant/messages"
 
-const suggestions = ["Generate me a new policy"]
-
-export function AssistantPrompt() {
+export function AssistantPrompt({ suggestions }: { suggestions: string[] }) {
   const router = useRouter()
   const [input, setInput] = useState("")
 

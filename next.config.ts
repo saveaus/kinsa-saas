@@ -2,6 +2,9 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@react-pdf/renderer"],
+  outputFileTracingIncludes: {
+    "/api/policy-templates/[key]": ["./modules/policies/templates/files/**/*"],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "32mb",
@@ -10,17 +13,37 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/audit", destination: "/activity", permanent: false },
-      { source: "/account", destination: "/settings/password", permanent: false },
-      { source: "/reminders", destination: "/settings/emails", permanent: false },
+      {
+        source: "/account",
+        destination: "/settings/password",
+        permanent: false,
+      },
+      {
+        source: "/reminders",
+        destination: "/settings/emails",
+        permanent: false,
+      },
       {
         source: "/settings/reminders",
         destination: "/settings/emails",
         permanent: false,
       },
       { source: "/logs", destination: "/dashboard", permanent: false },
-      { source: "/settings/logs", destination: "/settings/general", permanent: false },
-      { source: "/incidents", destination: "/logs/incidents", permanent: false },
-      { source: "/complaints", destination: "/logs/complaints", permanent: false },
+      {
+        source: "/settings/logs",
+        destination: "/settings/general",
+        permanent: false,
+      },
+      {
+        source: "/incidents",
+        destination: "/logs/incidents",
+        permanent: false,
+      },
+      {
+        source: "/complaints",
+        destination: "/logs/complaints",
+        permanent: false,
+      },
       { source: "/risks", destination: "/logs/risks", permanent: false },
       {
         source: "/restrictive-practices",

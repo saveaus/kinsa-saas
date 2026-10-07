@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { AssistantChat } from "@/components/assistant-chat"
 import { EmptyState } from "@/components/empty-state"
 import { buttonVariants } from "@/components/ui/button"
+import { registrationGroupChoices } from "@/lib/ndis-registration-groups"
 import { can, requireTenant } from "@/lib/tenant"
 import { allowsRegistered } from "@/modules/billing/access"
 import { getOrganisationBilling } from "@/modules/billing/queries"
@@ -52,5 +53,10 @@ export default async function StartInternalAuditReviewPage() {
     )
   }
 
-  return <AssistantChat mode="internal_audit" />
+  return (
+    <AssistantChat
+      mode="internal_audit"
+      auditChoices={registrationGroupChoices(context.organisationRegistrationGroups)}
+    />
+  )
 }

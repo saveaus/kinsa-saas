@@ -69,8 +69,8 @@ export default async function InternalAuditPage({
           <p className="text-sm text-muted-foreground">{formatDate(audit.createdAt)}</p>
         </div>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Assign a module, a category, or a single criterion. Each person answers
-          in the assistant. Open a name to read their responses and rating.
+          Every criterion for these registration groups is listed. Assign who
+          answers each one. Open a name to read their responses and rating.
         </p>
       </div>
       {modules.length === 0 ? (

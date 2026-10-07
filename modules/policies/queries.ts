@@ -6,7 +6,7 @@ export async function listPolicies(context: TenantContext) {
   const { data, error } = await supabase
     .from("policies")
     .select(
-      "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename"
+      "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename, template_key, category, file_id"
     )
     .eq("organisation_id", context.organisationId)
     .order("name", { ascending: true })
@@ -20,9 +20,34 @@ export async function getPolicy(context: TenantContext, policyId: string) {
   const { data, error } = await supabase
     .from("policies")
     .select(
-      "id, name, standard_code, review_on, status, body, mime_type, original_filename, storage_path"
+      "id, name, standard_code, review_on, status, body, mime_type, original_filename, storage_path, category, file_id"
     )
     .eq("id", policyId)
+    .eq("organisation_id", context.organisationId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function listPolicyFiles(context: TenantContext) {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from("policy_files")
+    .select("id, name, category")
+    .eq("organisation_id", context.organisationId)
+    .order("name", { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function getPolicyFile(context: TenantContext, fileId: string) {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from("policy_files")
+    .select("id, name, category")
+    .eq("id", fileId)
     .eq("organisation_id", context.organisationId)
     .maybeSingle()
 

@@ -16,6 +16,7 @@ export type AssistantChatRecord = {
   title: string
   messages: AssistantStoredMessage[]
   interviewAuditId: string | null
+  assignmentId: string | null
   purpose: AssistantChatPurpose
 }
 
@@ -68,6 +69,7 @@ export async function listAssistantChats(context: TenantContext) {
     .select("id, title, assignment_id, purpose")
     .eq("organisation_id", context.organisationId)
     .eq("user_id", context.userId)
+    .is("assignment_id", null)
     .is("archived_at", null)
     .order("updated_at", { ascending: false })
     .limit(20)
@@ -106,6 +108,7 @@ export async function getAssistantChat(context: TenantContext, id: string) {
     title: data.title,
     messages: parseStoredMessages(data.messages),
     interviewAuditId,
+    assignmentId: data.assignment_id,
     purpose: assistantChatPurpose(data.purpose),
   }
   return chat

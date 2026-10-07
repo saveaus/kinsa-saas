@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 
 import { AssistantChat } from "@/components/assistant-chat"
 import { can, requireTenant } from "@/lib/tenant"
+import { loginPromptSuggestions } from "@/modules/assistant/login-prompts"
 import { getAssistantChat } from "@/modules/assistant/chats"
 
 export default async function SavedAssistantPage({
@@ -14,9 +15,11 @@ export default async function SavedAssistantPage({
   const chat = await getAssistantChat(context, id)
   if (!chat) notFound()
   if (chat.purpose === "internal_audit") redirect(`/audits/reviews/${chat.id}`)
+  const suggestions = await loginPromptSuggestions(context)
   return (
     <AssistantChat
       chat={chat}
+      suggestions={suggestions}
       canImport={can(context, "workers.manage") && can(context, "documents.read_all")}
     />
   )

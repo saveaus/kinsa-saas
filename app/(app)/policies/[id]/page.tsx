@@ -3,12 +3,20 @@ import { notFound } from "next/navigation"
 import { ActionForm } from "@/components/action-form"
 import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
+import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
 import { practiceStandardName } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { requireRegistered } from "@/modules/billing/guard"
 import { acknowledgePolicyAction } from "@/modules/policies/actions"
-import { getPolicy, getPolicyAcknowledgement } from "@/modules/policies/queries"
+import { policyDocxType } from "@/modules/policies/attachments"
+import { categoryLabel, policyCategory } from "@/modules/policies/categories"
+import {
+  getPolicy,
+  getPolicyAcknowledgement,
+  getPolicyFile,
+} from "@/modules/policies/queries"
+import { cn } from "cn"
 
 export default async function PolicyPage({
   params,
@@ -25,17 +33,30 @@ export default async function PolicyPage({
   ])
   if (!policy) notFound()
 
+  const category = policyCategory(policy)
+  const policyFile = policy.file_id
+    ? await getPolicyFile(context, policy.file_id)
+    : null
   const hasFile = Boolean(policy.storage_path && policy.mime_type)
   const image = policy.mime_type?.startsWith("image/") ?? false
+  const word = policy.mime_type === policyDocxType
   const fileUrl = `/api/policies/${policy.id}`
 
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <BackLink href="/policies" />
+        <BackLink
+          href={
+            policyFile
+              ? `/policies/files/${policyFile.id}`
+              : `/policies/group/${category}`
+          }
+        >
+          {policyFile?.name ?? categoryLabel(category)}
+        </BackLink>
         <h1 className="font-heading text-lg">{policy.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {policy.original_filename ?? "Library policy"} ·{" "}
+          {policy.original_filename ?? "Written policy"} ·{" "}
           {practiceStandardName(policy.standard_code)} · Review{" "}
           {formatDate(policy.review_on)}
         </p>
@@ -59,7 +80,7 @@ export default async function PolicyPage({
         </ActionForm>
       )}
       {policy.body ? (
-        <article className="max-w-2xl whitespace-pre-wrap rounded-lg border bg-card p-4 text-sm leading-6">
+        <article className="max-w-2xl rounded-lg border bg-card p-4 text-sm leading-6 whitespace-pre-wrap">
           {policy.body}
         </article>
       ) : null}
@@ -72,7 +93,20 @@ export default async function PolicyPage({
           className="max-h-[calc(100svh-12rem)] w-full rounded-lg border object-contain"
         />
       ) : null}
-      {hasFile && !image ? <PolicyPdf url={fileUrl} /> : null}
+      {hasFile && word ? (
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "w-fit"
+          )}
+        >
+          Open attachment
+        </a>
+      ) : null}
+      {hasFile && !image && !word ? <PolicyPdf url={fileUrl} /> : null}
     </div>
   )
 }

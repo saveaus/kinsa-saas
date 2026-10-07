@@ -60,7 +60,15 @@ import type { ReminderCategory } from "@/modules/reminders/categories"
 
 export type RecordCell =
   | { kind: "text"; text: string }
-  | { kind: "link"; text: string; href: string; detail?: string; compact?: boolean }
+  | {
+      kind: "link"
+      text: string
+      href: string
+      detail?: string
+      compact?: boolean
+      newTab?: boolean
+      download?: boolean
+    }
   | { kind: "badge"; text: string; tone: "ok" | "warn" | "danger" | "neutral" }
   | { kind: "chip"; text: string; tone: ChipTone }
   | {
@@ -76,7 +84,12 @@ export type RecordCell =
   | { kind: "overall"; overall: WorkerCompliance["overall"] }
   | { kind: "item"; status: ComplianceItemStatus; text: string }
   | { kind: "document"; text: string; documentId: string }
-  | { kind: "review"; text: string; documentId: string; status: "pending" | "approved" | "rejected" }
+  | {
+      kind: "review"
+      text: string
+      documentId: string
+      status: "pending" | "approved" | "rejected"
+    }
   | {
       kind: "policyFile"
       text: string
@@ -132,6 +145,7 @@ export type RecordCell =
       roles: string[]
       roleOptions?: { value: string; label: string }[]
     }
+  | { kind: "slot"; text: string; node: React.ReactNode }
 
 export type RecordColumn = {
   id: string
@@ -231,11 +245,22 @@ function CellView({
       return cell.text || "—"
     case "link":
       if (cell.compact) {
+        const className = cn(buttonVariants({ variant: "outline", size: "sm" }))
+        if (cell.newTab || cell.download) {
+          return (
+            <a
+              href={cell.href}
+              className={className}
+              target={cell.newTab ? "_blank" : undefined}
+              rel={cell.newTab ? "noopener noreferrer" : undefined}
+              download={cell.download || undefined}
+            >
+              {cell.text}
+            </a>
+          )
+        }
         return (
-          <Link
-            href={cell.href}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-          >
+          <Link href={cell.href} className={className}>
             {cell.text}
           </Link>
         )
@@ -408,6 +433,8 @@ function CellView({
           roleOptions={cell.roleOptions}
         />
       )
+    case "slot":
+      return cell.node
     default: {
       const unreachable: never = cell
       return unreachable
@@ -987,7 +1014,9 @@ export function RecordTable({
                     return (
                       <th
                         key={column.id}
-                        style={column.width ? { width: column.width } : undefined}
+                        style={
+                          column.width ? { width: column.width } : undefined
+                        }
                         className="px-3 py-2 font-normal whitespace-nowrap"
                       >
                         {column.label}
@@ -1106,7 +1135,9 @@ export function RecordTable({
                             >
                               <CellView
                                 cell={row.cells[columnId]}
-                                onFilter={(text) => filterColumn(columnId, text)}
+                                onFilter={(text) =>
+                                  filterColumn(columnId, text)
+                                }
                               />
                             </span>
                           ) : (

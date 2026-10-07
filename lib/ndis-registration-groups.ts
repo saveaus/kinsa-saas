@@ -61,6 +61,14 @@ export function registrationGroupLabel(code: string) {
   return group ? `${group.code} · ${group.name}` : code
 }
 
+export function registrationGroupChoices(groups: readonly string[]) {
+  const held = new Set(groups)
+  return NDIS_REGISTRATION_GROUPS.filter((group) => held.has(group.code)).map((group) => ({
+    code: group.code,
+    label: `${group.code} · ${group.name}`,
+  }))
+}
+
 export function asRegistrationGroups(value: unknown): NdisRegistrationGroupCode[] {
   if (!Array.isArray(value)) return []
   return value.map(String).filter(isNdisRegistrationGroupCode)

@@ -218,3 +218,20 @@ export async function startAuditInterview(assignmentId: string) {
   revalidatePath(`/audits/${assignment.audit_id}`)
   redirect(`/assistant/${chat.id}`)
 }
+
+export async function confirmInterviewRating(value: unknown): Promise<ActionState> {
+  const { context } = await requireTenant()
+  if (!value || typeof value !== "object") return { error: "That rating could not be read." }
+  const record = value as Record<string, unknown>
+  if (!isAuditRating(record.rating) || typeof record.summary !== "string") {
+    return { error: "That rating could not be read." }
+  }
+  if (typeof record.assignmentId !== "string") return { error: "That interview could not be found." }
+  const result = await writeAssessment(context, record.assignmentId, {
+    rating: record.rating,
+    source: "assistant",
+    summary: record.summary,
+  })
+  if (result.error) return { error: result.error }
+  return { message: "Saved. The rating is on the internal audit." }
+}

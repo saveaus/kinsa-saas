@@ -24,8 +24,8 @@ export function StartInternalAuditDialog() {
         <DialogHeader>
           <DialogTitle>Start internal audit</DialogTitle>
           <DialogDescription>
-            A new run asks the same criteria in different words. Earlier runs stay
-            on record.
+            This run covers every practice standard for your registration groups.
+            You then assign who answers each one. Earlier runs stay on record.
           </DialogDescription>
         </DialogHeader>
         <ActionForm action={startInternalAuditAction} submitLabel="Start">

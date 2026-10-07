@@ -98,15 +98,20 @@ export async function getLapsingWindowDays(context: TenantContext) {
   return data?.[0]?.days_before ?? 90
 }
 
-export async function buildWorkforceCompliance(context: TenantContext) {
+export async function buildWorkforceCompliance(
+  context: TenantContext,
+  options?: { includeInactive?: boolean }
+) {
   const supabase = await createServerSupabase()
+  const workersRequest = supabase
+    .from("workers")
+    .select("*")
+    .eq("organisation_id", context.organisationId)
+    .is("deleted_at", null)
   const [workersResult, types, documentsResult] = await Promise.all([
-    supabase
-      .from("workers")
-      .select("*")
-      .eq("organisation_id", context.organisationId)
-      .is("deleted_at", null)
-      .eq("employment_status", "active"),
+    options?.includeInactive
+      ? workersRequest
+      : workersRequest.eq("employment_status", "active"),
     listEnabledTypes(context),
     supabase
       .from("documents")
