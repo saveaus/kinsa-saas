@@ -6,6 +6,7 @@ import { BackLink } from "@/components/back-link"
 import { EmptyState } from "@/components/empty-state"
 import { countPhrase, PolicyFolders } from "@/components/policy-folders"
 import { MovePolicyDialog } from "@/components/policy-file-actions"
+import { PolicyFlagLink } from "@/components/policy-flag"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
@@ -32,12 +33,15 @@ const standingTone = {
   overdue: "red",
 } as const
 
-function folderColumns(canMove: boolean) {
+function folderColumns(canMove: boolean, flagged: boolean) {
   return [
     { id: "name", label: "Name", clip: true },
     { id: "standard", label: "Practice standard", clip: true },
     { id: "review", label: "Next review", width: "8.75rem" },
     { id: "status", label: "Status", width: "9.25rem" },
+    ...(flagged
+      ? [{ id: "flag", label: "Flag", locked: true, width: "3.5rem" }]
+      : []),
     ...(canMove
       ? [{ id: "move", label: "Move", locked: true, width: "5.75rem" }]
       : []),
@@ -99,6 +103,17 @@ export default async function PolicyFolderPage({
             standingTone[policyStanding("accepted", policy.review_on)],
           target: { kind: "policy", id: policy.id },
         },
+        ...(unfiled.some((item) => item.compliance_flagged)
+          ? {
+              flag: policy.compliance_flagged
+                ? {
+                    kind: "slot" as const,
+                    text: "Flag",
+                    node: <PolicyFlagLink id={policy.id} />,
+                  }
+                : { kind: "text" as const, text: " " },
+            }
+          : {}),
         open: {
           kind: "link",
           text: "Open",
@@ -187,7 +202,10 @@ export default async function PolicyFolderPage({
       {rows.length > 0 ? (
         <RecordTable
           title="Policies"
-          columns={folderColumns(folderFiles.length > 0)}
+          columns={folderColumns(
+            folderFiles.length > 0,
+            unfiled.some((policy) => policy.compliance_flagged)
+          )}
           rows={rows}
         />
       ) : null}

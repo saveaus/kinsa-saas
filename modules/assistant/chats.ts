@@ -25,6 +25,7 @@ export type AssistantChatLink = {
   title: string
   locked: boolean
   purpose: AssistantChatPurpose
+  updatedAt: string
 }
 
 export type InternalAuditReview = {
@@ -66,7 +67,7 @@ export async function listAssistantChats(context: TenantContext) {
   const supabase = await createServerSupabase()
   const { data } = await supabase
     .from("assistant_chats")
-    .select("id, title, assignment_id, purpose")
+    .select("id, title, assignment_id, purpose, updated_at")
     .eq("organisation_id", context.organisationId)
     .eq("user_id", context.userId)
     .is("assignment_id", null)
@@ -79,6 +80,7 @@ export async function listAssistantChats(context: TenantContext) {
     title: chat.title,
     locked: Boolean(chat.assignment_id),
     purpose: assistantChatPurpose(chat.purpose),
+    updatedAt: chat.updated_at,
   })) satisfies AssistantChatLink[]
 }
 

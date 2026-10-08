@@ -8,6 +8,7 @@ import {
   KeyRound,
   Mail,
   Shield,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -26,7 +27,8 @@ const storageKey = "kinsa-settings-groups"
 const sectionIcons: Record<string, LucideIcon> = {
   "/settings/password": KeyRound,
   "/settings/general": Building2,
-  "/settings/roles": Shield,
+  "/settings/teams": Users,
+  "/settings/permissions": Shield,
   "/settings/credentials": BadgeCheck,
   "/settings/billing": CreditCard,
   "/settings/emails": Mail,
@@ -145,7 +147,10 @@ export function SettingsNav({ admin }: { admin: boolean }) {
   )
 
   return (
-    <nav aria-label="Settings" className="grid content-start gap-3">
+    <nav
+      aria-label="Settings"
+      className="grid content-start gap-3 md:sticky md:top-0 md:self-start"
+    >
       <p className="px-2 text-sm font-medium">Settings</p>
       {groups.map((group) => (
         <SettingsGroupNav

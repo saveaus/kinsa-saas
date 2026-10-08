@@ -1,4 +1,11 @@
-import { addDays, isAfter, isBefore, parseISO, startOfDay } from "date-fns"
+import {
+  addDays,
+  format,
+  isAfter,
+  isBefore,
+  parseISO,
+  startOfDay,
+} from "date-fns"
 
 import type { NdisRegistrationGroupCode } from "@/lib/ndis-registration-groups"
 import {
@@ -84,6 +91,13 @@ export type PackLogEvidence = {
   href: string
 }
 
+export type PackLogDue = {
+  id: string
+  summary: string
+  dueOn: string
+  href: string
+}
+
 export type AuditPackInput = {
   registrationGroups: readonly NdisRegistrationGroupCode[]
   policies: PackPolicy[]
@@ -91,6 +105,7 @@ export type AuditPackInput = {
   participants: PackParticipant[]
   workerItems: PackWorkerItem[]
   logEvidence?: PackLogEvidence[]
+  logDue?: PackLogDue[]
   lapsingWindowDays: number
   today?: Date
 }
@@ -506,6 +521,20 @@ export function scoreAuditPack(input: AuditPackInput): PackItem[] {
       status: "met",
       detail: "Filed",
       href: log.href,
+    })
+  }
+
+  const todayOn = format(startOfDay(today), "yyyy-MM-dd")
+  for (const due of input.logDue ?? []) {
+    if (due.dueOn > todayOn) continue
+    const todayDue = due.dueOn === todayOn
+    items.push({
+      key: `log-due:${due.id}`,
+      label: due.summary,
+      area: "other",
+      status: todayDue ? "missing" : "overdue",
+      detail: todayDue ? "Due today" : `Due ${format(parseISO(due.dueOn), "d MMM yyyy")}`,
+      href: due.href,
     })
   }
 

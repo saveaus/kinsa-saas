@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useActionState, useEffect, useRef } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { cn } from "cn"
 
-type State = { error?: string; message?: string; inviteUrl?: string }
+type State = { error?: string; message?: string; inviteUrl?: string; href?: string }
 
 export function ActionForm({
   action,
@@ -40,6 +41,7 @@ export function ActionForm({
   bare?: boolean
   onPendingChange?: (pending: boolean) => void
 }) {
+  const router = useRouter()
   const [state, formAction, pending] = useActionState(action, {})
   const submitted = useRef(false)
 
@@ -55,9 +57,10 @@ export function ActionForm({
     if (submitted.current && state.message && !state.error) {
       submitted.current = false
       toast.add({ title: state.message, type: "success", timeout: 4000 })
+      if (state.href) router.push(state.href)
       onSuccess?.()
     }
-  }, [pending, state.message, state.error, onSuccess])
+  }, [pending, state.message, state.error, state.href, onSuccess, router])
 
   return (
     <form

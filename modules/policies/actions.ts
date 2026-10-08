@@ -12,6 +12,7 @@ import {
   policyAttachmentType,
   policyDocxType,
 } from "@/modules/policies/attachments"
+import { reviewAddedPolicy } from "@/modules/policies/compliance"
 import { templateDocxPath } from "@/modules/policies/template-file"
 import { templatesForOrganisation } from "@/modules/policies/templates"
 import { createServerSupabase } from "@/lib/supabase/server"
@@ -92,6 +93,14 @@ export async function createPolicyAction(
   const acceptedAt = new Date().toISOString()
 
   const bytes = new Uint8Array(await file.arrayBuffer())
+  const compliance = await reviewAddedPolicy({
+    organisationId: context.organisationId,
+    standardCode,
+    filename: file.name,
+    mimeType,
+    bytes,
+    text: null,
+  })
   const { error: uploadError } = await supabase.storage
     .from("policies")
     .upload(storagePath, bytes, {
@@ -113,6 +122,8 @@ export async function createPolicyAction(
     original_filename: file.name,
     mime_type: mimeType,
     file_size_bytes: file.size,
+    compliance_flagged: compliance.flagged,
+    compliance_note: compliance.note,
     drafted_by: "person",
     created_by: context.userId,
     accepted_by: accepting ? context.userId : null,
@@ -136,6 +147,12 @@ export async function createPolicyAction(
       draftedBy: "person",
     })
   }
+  if (compliance.flagged) {
+    await recordAudit("policy.flagged", "policy", policyId, {
+      name,
+      standardCode,
+    })
+  }
 
   revalidatePath("/policies")
   revalidatePath(`/policies/group/${policyFile.category}`)
@@ -143,9 +160,7 @@ export async function createPolicyAction(
   revalidatePath("/dashboard")
   revalidatePath("/activity")
   return {
-    message: accepting
-      ? "Policy accepted. It counts once it is acknowledged or linked to a record."
-      : "Draft saved. It does not count until someone accepts it.",
+    message: savedPolicyMessage(accepting, null, compliance.flagged),
   }
 }
 
@@ -407,6 +422,15 @@ export async function usePolicyTemplateAction(
   if (bytes.byteLength < 1 || bytes.byteLength > MAX_BYTES) {
     return { error: "This template is too large to save." }
   }
+  const templateBytes = new Uint8Array(bytes)
+  const compliance = await reviewAddedPolicy({
+    organisationId: context.organisationId,
+    standardCode,
+    filename: `${located.template.name}.docx`,
+    mimeType: policyDocxType,
+    bytes: templateBytes,
+    text: null,
+  })
 
   const supabase = await createServerSupabase()
   const { data: policyFile, error: fileError } = await supabase
@@ -431,7 +455,7 @@ export async function usePolicyTemplateAction(
   const acceptedAt = new Date().toISOString()
   const { error: uploadError } = await supabase.storage
     .from("policies")
-    .upload(storagePath, bytes, {
+    .upload(storagePath, templateBytes, {
       contentType: policyDocxType,
       upsert: false,
     })
@@ -450,7 +474,9 @@ export async function usePolicyTemplateAction(
     storage_path: storagePath,
     original_filename: filename,
     mime_type: policyDocxType,
-    file_size_bytes: bytes.byteLength,
+    file_size_bytes: templateBytes.byteLength,
+    compliance_flagged: compliance.flagged,
+    compliance_note: compliance.note,
     drafted_by: "person",
     created_by: context.userId,
     accepted_by: accepting ? context.userId : null,
@@ -477,16 +503,37 @@ export async function usePolicyTemplateAction(
       draftedBy: "person",
     })
   }
+  if (compliance.flagged) {
+    await recordAudit("policy.flagged", "policy", policyId, {
+      name,
+      standardCode,
+    })
+  }
   revalidatePath("/policies")
   revalidatePath(`/policies/group/${policyFile.category}`)
   revalidatePath(`/policies/files/${policyFile.id}`)
   revalidatePath("/dashboard")
   revalidatePath("/activity")
   return {
-    message: accepting
-      ? `Policy added to ${policyFile.name}.`
-      : `Draft added to ${policyFile.name}.`,
+    message: savedPolicyMessage(accepting, policyFile.name, compliance.flagged),
   }
+}
+
+function savedPolicyMessage(
+  accepting: boolean,
+  fileName: string | null,
+  flagged: boolean
+) {
+  const saved = fileName
+    ? accepting
+      ? `Policy added to ${fileName}.`
+      : `Draft added to ${fileName}.`
+    : accepting
+      ? "Policy accepted. It counts once it is acknowledged or linked to a record."
+      : "Draft saved. It does not count until someone accepts it."
+  return flagged
+    ? `${saved} It is flagged because it does not meet the current standard.`
+    : saved
 }
 
 export async function acknowledgePolicyAction(

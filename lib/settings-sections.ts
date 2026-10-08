@@ -27,11 +27,18 @@ export const settingsSections: SettingsSection[] = [
       "Business name, ABN, NDIS registration number, registration groups, and logo.",
   },
   {
-    href: "/settings/roles",
-    label: "Roles and permissions",
+    href: "/settings/teams",
+    label: "Teams",
     group: "Organisation",
     audience: "admin",
-    description: "Create teams and choose what each one can do.",
+    description: "Create, rename, and delete worker teams.",
+  },
+  {
+    href: "/settings/permissions",
+    label: "Permissions",
+    group: "Organisation",
+    audience: "admin",
+    description: "Choose what people on each team can do.",
   },
   {
     href: "/settings/credentials",

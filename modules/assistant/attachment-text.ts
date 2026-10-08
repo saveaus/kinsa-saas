@@ -2,6 +2,7 @@ import type { UIMessage } from "ai"
 
 const excerptLimit = 6000
 const dataUrlLimit = 6_000_000
+export const trialDataUrlLimit = 16_000
 const imagePrompt = "Look at the attached image and say what you can see."
 
 const imageTypes: Record<string, string> = {
@@ -12,12 +13,16 @@ const imageTypes: Record<string, string> = {
   "image/webp": "image/webp",
 }
 
-export function expandAttachmentText(messages: UIMessage[], textLimit: number): UIMessage[] {
+export function expandAttachmentText(
+  messages: UIMessage[],
+  textLimit: number,
+  fileLimit = dataUrlLimit
+): UIMessage[] {
   return messages.map((message) => {
     const parts = message.parts.flatMap((part): UIMessage["parts"] => {
       if (part.type === "text") return [{ ...part, text: part.text.slice(0, textLimit) }]
       if (part.type !== "file") return [part]
-      if (part.url.length > dataUrlLimit) {
+      if (part.url.length > fileLimit) {
         const name = part.filename?.trim() || "A file"
         return [{ type: "text", text: `Attached file ${name} was too large to read.` }]
       }

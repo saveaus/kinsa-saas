@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { notFound } from "next/navigation"
 
+import { ProfileLogs } from "@/components/profile-logs"
 import { WorkerRecord } from "@/components/worker-record"
 import { formatRelativeDay } from "@/lib/format-date"
 import { personName } from "@/lib/person-name"
@@ -16,6 +17,11 @@ import {
   listDocumentsForWorker,
   listEnabledTypes,
 } from "@/modules/documents/queries"
+import { allowsRegistered } from "@/modules/billing/access"
+import { getOrganisationBilling } from "@/modules/billing/queries"
+import { stripeConfigured } from "@/modules/billing/stripe"
+import { listCustomLogs } from "@/modules/logs/queries"
+import { logOnPerson } from "@/modules/logs/standing"
 import { listTeams } from "@/modules/teams/queries"
 import {
   deleteWorkerAction,
@@ -45,13 +51,16 @@ export default async function WorkerDetailPage({
   const worker = await getWorker(context, id)
   if (!worker) notFound()
 
-  const [documents, types, lapsingWindowDays, requirementMaps, teams] =
+  const canLogs = can(context, "settings.manage")
+  const [documents, types, lapsingWindowDays, requirementMaps, teams, billing, customLogs] =
     await Promise.all([
       listDocumentsForWorker(context, id),
       listEnabledTypes(context),
       getLapsingWindowDays(context),
       listRequirementMaps(context),
       listTeams(context),
+      getOrganisationBilling(context.organisationId),
+      canLogs ? listCustomLogs(context) : Promise.resolve([]),
     ])
 
   const scoped = attachRequirementRoles([], types, requirementMaps)
@@ -81,7 +90,11 @@ export default async function WorkerDetailPage({
       ? `${activityBase}#activity`
       : `${activityBase}?activityPage=${page}#activity`
 
+  const showLogs =
+    canLogs && allowsRegistered(billing, new Date(), stripeConfigured())
+
   return (
+    <div className="grid gap-6">
     <WorkerRecord
       name={personName(worker.first_name, worker.last_name)}
       email={worker.email}
@@ -143,5 +156,13 @@ export default async function WorkerDetailPage({
       pdfHref={`/api/export/worker/${worker.id}?format=pdf`}
       roleOptions={teams.map((team) => ({ code: team.code, name: team.name }))}
     />
+    {showLogs ? (
+      <ProfileLogs
+        logs={customLogs.filter((log) =>
+          logOnPerson(log, { workerId: worker.id })
+        )}
+      />
+    ) : null}
+    </div>
   )
 }

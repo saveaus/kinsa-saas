@@ -4,6 +4,7 @@ import { test } from "node:test"
 import {
   logOnPerson,
   logPlaceLabel,
+  logRegisterRoute,
   logShown,
   logSlug,
 } from "@/modules/logs/standing"
@@ -36,8 +37,26 @@ test("a person log is labelled with that person", () => {
       subject: "worker",
       personName: null,
     }),
-    "Sidebar, and on every worker"
+    "Logs and worker profiles"
   )
+})
+
+test("a log route is logs, every profile, or one record", () => {
+  assert.deepEqual(logRegisterRoute("logs", ""), {
+    scope: "global",
+    subject: "organisation",
+    participant_id: null,
+    worker_id: null,
+  })
+  assert.equal(
+    logRegisterRoute(
+      "record",
+      "participant:14a8abb9-7dab-445e-bf24-209b60d9364d"
+    )?.participant_id,
+    "14a8abb9-7dab-445e-bf24-209b60d9364d"
+  )
+  assert.equal(logRegisterRoute("record", ""), null)
+  assert.equal(logRegisterRoute("finance", ""), null)
 })
 
 test("a custom log appears on the matching person", () => {
@@ -60,6 +79,6 @@ test("a custom log appears on the matching person", () => {
   )
   assert.equal(
     logOnPerson({ ...shared, visible: false }, { participantId: "p1" }),
-    false
+    true
   )
 })

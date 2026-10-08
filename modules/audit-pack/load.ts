@@ -1,3 +1,5 @@
+import { format, startOfDay } from "date-fns"
+
 import { personName } from "@/lib/person-name"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { can, type TenantContext } from "@/lib/tenant"
@@ -5,6 +7,7 @@ import {
   packReadiness,
   scoreAuditPack,
   type PackIncident,
+  type PackLogDue,
   type PackLogEvidence,
   type PackPolicy,
 } from "@/modules/audit-pack/score"
@@ -14,7 +17,11 @@ import {
   type IncidentKind,
   type IncidentStatus,
 } from "@/modules/incidents/standing"
-import { asEvidenceArea, type EvidenceArea } from "@/modules/logs/standing"
+import {
+  asEvidenceArea,
+  logFileHref,
+  type EvidenceArea,
+} from "@/modules/logs/standing"
 import { listParticipants } from "@/modules/participants/queries"
 import type { PolicyRecordStatus } from "@/modules/policies/standing"
 
@@ -44,6 +51,7 @@ export async function loadAuditPack(
   let policies: PackPolicy[] = []
   let incidents: PackIncident[] = []
   let logEvidence: PackLogEvidence[] = []
+  let logDue: PackLogDue[] = []
   const participants = governance ? await listParticipants(context) : []
 
   if (governance) {
@@ -122,6 +130,27 @@ export async function loadAuditPack(
         ]
       })
     }
+
+    const todayOn = format(startOfDay(new Date()), "yyyy-MM-dd")
+    const { data: dueRows, error: dueError } = await supabase
+      .from("log_entries")
+      .select("id, summary, due_on, register_id")
+      .eq("organisation_id", context.organisationId)
+      .not("due_on", "is", null)
+      .lte("due_on", todayOn)
+    if (dueError) throw new Error(dueError.message)
+    logDue = (dueRows ?? []).flatMap((entry) =>
+      entry.due_on
+        ? [
+            {
+              id: entry.id,
+              summary: entry.summary,
+              dueOn: entry.due_on,
+              href: logFileHref(entry.register_id),
+            },
+          ]
+        : []
+    )
   }
 
   const items = scoreAuditPack({
@@ -129,6 +158,7 @@ export async function loadAuditPack(
     policies,
     incidents,
     logEvidence,
+    logDue,
     participants,
     workerItems: workforce.flatMap(({ worker, compliance }) =>
       compliance.items.map((item) => ({

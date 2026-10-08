@@ -31,13 +31,13 @@ const brand = "var(--primary)"
 function statusSliceColor(status: PackStatus) {
   switch (status) {
     case "overdue":
-      return "oklch(0.45 0.19 264)"
+      return "oklch(0.563 0.19 36.1)"
     case "missing":
       return brand
     case "unaccepted":
-      return "oklch(0.72 0.12 264)"
+      return "oklch(0.735 0.184 53.6)"
     case "lapsing":
-      return "oklch(0.82 0.08 264)"
+      return "oklch(0.829 0.154 76.5)"
     case "met":
       return brand
     default: {

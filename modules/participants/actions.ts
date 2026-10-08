@@ -207,7 +207,9 @@ export async function deleteParticipantAction(
       .eq("status", "draft")
     if (draftError) return { error: draftError.message }
   }
-  const logPaths = (logEntries ?? []).map((entry) => entry.storage_path)
+  const logPaths = (logEntries ?? []).flatMap((entry) =>
+    entry.storage_path ? [entry.storage_path] : []
+  )
   if ((logEntries ?? []).length > 0) {
     const { error: logDraftError } = await supabase
       .from("log_entries")

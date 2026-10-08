@@ -6,10 +6,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { signInAction } from "@/modules/identity/actions"
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const params = await searchParams
+  const expired = params.error === "confirm"
   return (
     <AuthFrame
       title="Welcome back"
+      description={
+        expired
+          ? "That confirmation link has expired. Create the account again and open the new email from Kinsa."
+          : undefined
+      }
       aside={
         <p>
           New provider?{" "}
@@ -24,6 +35,7 @@ export default function LoginPage() {
         submitLabel="Sign in"
         pendingLabel="Signing in..."
         fullWidth
+        submitClassName="h-10"
         className="gap-4"
       >
         <div className="grid gap-1.5">

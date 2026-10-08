@@ -86,10 +86,6 @@ export async function uploadDocumentAction(
     console.error("document review", error)
     return null
   })
-  if (review?.decision === "approve") {
-    revalidateCompliance()
-    return { message: "The assistant approved this document." }
-  }
   if (review?.decision === "flag") {
     return { message: "A person needs to check this document. It is in Approvals." }
   }

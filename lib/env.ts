@@ -32,8 +32,9 @@ export function appUrl() {
 }
 
 /**
- * Prefer the request host (so production signups never emit localhost links),
- * but never trust localhost/private hosts when a public app URL is configured.
+ * Use the request origin only when its host is the configured app host.
+ * A forwarded host that does not match is ignored, so invite and billing
+ * links stay on the app the deployment is configured to use.
  */
 export function resolveAppUrl(requestOrigin?: string | null) {
   const configured = appUrl()
@@ -41,13 +42,10 @@ export function resolveAppUrl(requestOrigin?: string | null) {
   if (!origin) return configured
 
   try {
-    const host = new URL(origin).hostname
-    const isLocal =
-      host === "localhost" || host === "127.0.0.1" || host.endsWith(".local") || host === "0.0.0.0"
-    if (isLocal && !configured.includes("localhost") && !configured.includes("127.0.0.1")) {
-      return configured
-    }
-    return origin
+    const requestHost = new URL(origin).host
+    const configuredHost = new URL(configured).host
+    if (requestHost === configuredHost) return origin
+    return configured
   } catch {
     return configured
   }

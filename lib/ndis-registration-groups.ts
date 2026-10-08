@@ -42,6 +42,74 @@ export const NDIS_REGISTRATION_GROUPS = [
 
 export type NdisRegistrationGroupCode = (typeof NDIS_REGISTRATION_GROUPS)[number]["code"]
 
+/** NDIS price-guide classes of support. Digital platforms sit outside those three. */
+export const REGISTRATION_GROUP_CATEGORIES = [
+  "Core",
+  "Capital",
+  "Capacity building",
+  "Digital platforms",
+] as const
+
+export type RegistrationGroupCategory = (typeof REGISTRATION_GROUP_CATEGORIES)[number]
+
+const categoryByCode = {
+  "0101": "Capacity building",
+  "0102": "Capacity building",
+  "0103": "Capital",
+  "0104": "Core",
+  "0105": "Capital",
+  "0106": "Capacity building",
+  "0107": "Core",
+  "0108": "Core",
+  "0109": "Capital",
+  "0110": "Capacity building",
+  "0111": "Capital",
+  "0112": "Capital",
+  "0113": "Capital",
+  "0114": "Capacity building",
+  "0115": "Core",
+  "0116": "Core",
+  "0117": "Capacity building",
+  "0118": "Capacity building",
+  "0119": "Capacity building",
+  "0120": "Core",
+  "0121": "Capacity building",
+  "0122": "Capital",
+  "0123": "Capital",
+  "0124": "Capital",
+  "0125": "Core",
+  "0126": "Capacity building",
+  "0127": "Capacity building",
+  "0128": "Capacity building",
+  "0129": "Capacity building",
+  "0130": "Capital",
+  "0131": "Capital",
+  "0132": "Capacity building",
+  "0133": "Capacity building",
+  "0134": "Capacity building",
+  "0135": "Capital",
+  "0136": "Core",
+  "0137": "Digital platforms",
+  "0138": "Core",
+} as const satisfies Record<NdisRegistrationGroupCode, RegistrationGroupCategory>
+
+export function registrationGroupsByCategory() {
+  return REGISTRATION_GROUP_CATEGORIES.map((category) => ({
+    category,
+    groups: NDIS_REGISTRATION_GROUPS.filter((group) => categoryByCode[group.code] === category),
+  }))
+}
+
+export function selectedRegistrationGroupsByCategory(codes: readonly string[]) {
+  const held = new Set(codes)
+  return registrationGroupsByCategory()
+    .map((section) => ({
+      category: section.category,
+      groups: section.groups.filter((group) => held.has(group.code)),
+    }))
+    .filter((section) => section.groups.length > 0)
+}
+
 const codeSet = new Set<string>(NDIS_REGISTRATION_GROUPS.map((group) => group.code))
 
 export function isNdisRegistrationGroupCode(value: string): value is NdisRegistrationGroupCode {

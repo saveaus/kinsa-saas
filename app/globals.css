@@ -49,38 +49,38 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.987 0.004 106.5);
+    --foreground: oklch(0.239 0.006 91.6);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.239 0.006 91.6);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.584 0.209 264.6);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.239 0.006 91.6);
+    --primary: oklch(0.665 0.214 37.6);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.97 0.005 95.1);
+    --secondary-foreground: oklch(0.239 0.006 91.6);
+    --muted: oklch(0.97 0.005 95.1);
+    --muted-foreground: oklch(0.5 0.014 95);
+    --accent: oklch(0.97 0.005 95.1);
+    --accent-foreground: oklch(0.239 0.006 91.6);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.584 0.209 264.6);
-    --chart-1: oklch(0.584 0.209 264.6);
-    --chart-2: oklch(0.72 0.12 264);
-    --chart-3: oklch(0.82 0.08 264);
-    --chart-4: oklch(0.45 0.19 264);
-    --chart-5: oklch(0.35 0.12 264);
+    --border: oklch(0.919 0.011 89.7);
+    --input: oklch(0.919 0.011 89.7);
+    --ring: oklch(0.665 0.214 37.6);
+    --chart-1: oklch(0.665 0.214 37.6);
+    --chart-2: oklch(0.735 0.184 53.6);
+    --chart-3: oklch(0.829 0.154 76.5);
+    --chart-4: oklch(0.879 0.131 84.7);
+    --chart-5: oklch(0.563 0.19 36.1);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: oklch(0.987 0.004 106.5);
+    --sidebar-foreground: oklch(0.239 0.006 91.6);
+    --sidebar-primary: oklch(0.239 0.006 91.6);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.97 0.005 95.1);
+    --sidebar-accent-foreground: oklch(0.239 0.006 91.6);
+    --sidebar-border: oklch(0.919 0.011 89.7);
+    --sidebar-ring: oklch(0.665 0.214 37.6);
 }
 
 .dark {
@@ -90,31 +90,31 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.27 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.584 0.209 264.6);
-    --primary-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.665 0.214 37.6);
+    --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.32 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.32 0 0);
-    --muted-foreground: oklch(0.78 0 0);
+    --muted-foreground: oklch(0.78 0.012 90);
     --accent: oklch(0.32 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 16%);
-    --input: oklch(1 0 0 / 18%);
-    --ring: oklch(0.584 0.209 264.6);
-    --chart-1: oklch(0.584 0.209 264.6);
-    --chart-2: oklch(0.72 0.12 264);
-    --chart-3: oklch(0.82 0.08 264);
-    --chart-4: oklch(0.45 0.19 264);
-    --chart-5: oklch(0.35 0.12 264);
+    --border: oklch(0.72 0.03 70 / 18%);
+    --input: oklch(0.75 0.03 70 / 20%);
+    --ring: oklch(0.665 0.214 37.6);
+    --chart-1: oklch(0.665 0.214 37.6);
+    --chart-2: oklch(0.735 0.184 53.6);
+    --chart-3: oklch(0.829 0.154 76.5);
+    --chart-4: oklch(0.879 0.131 84.7);
+    --chart-5: oklch(0.563 0.19 36.1);
     --sidebar: oklch(0.17 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.665 0.214 37.6);
+    --sidebar-primary-foreground: oklch(1 0 0);
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-border: oklch(0.72 0.03 70 / 14%);
+    --sidebar-ring: oklch(0.665 0.214 37.6);
 }
 
 @layer base {
@@ -156,4 +156,88 @@
   -webkit-background-clip: text;
   color: transparent;
   animation: assistant-thinking 1.6s ease-in-out infinite;
+}
+
+.auth-backdrop {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #fbfbf8;
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, #201f1c 12%, transparent) 0.5px, transparent 0.5px),
+    linear-gradient(to bottom, color-mix(in oklch, #201f1c 12%, transparent) 0.5px, transparent 0.5px);
+  background-size: 240px 240px;
+  color: #201f1c;
+  color-scheme: light;
+  --background: oklch(0.987 0.004 106.5);
+  --foreground: oklch(0.239 0.006 91.6);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.239 0.006 91.6);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.239 0.006 91.6);
+  --primary: oklch(0.665 0.214 37.6);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.97 0.005 95.1);
+  --secondary-foreground: oklch(0.239 0.006 91.6);
+  --muted: oklch(0.97 0.005 95.1);
+  --muted-foreground: oklch(0.5 0.014 95);
+  --accent: oklch(0.97 0.005 95.1);
+  --accent-foreground: oklch(0.239 0.006 91.6);
+  --border: oklch(0.919 0.011 89.7);
+  --input: oklch(0.919 0.011 89.7);
+  --ring: oklch(0.665 0.214 37.6);
+}
+
+.auth-tile {
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+  width: 240px;
+  height: 240px;
+  opacity: 0;
+  animation: auth-tile-fade 3.6s ease-in-out infinite;
+}
+
+.auth-tile[data-tile="1"] {
+  top: 0;
+  left: 0;
+  background: #fa520f;
+}
+
+.auth-tile[data-tile="2"] {
+  top: 240px;
+  right: 0;
+  background: #ff8205;
+  animation-delay: 0.9s;
+}
+
+.auth-tile[data-tile="3"] {
+  bottom: 0;
+  left: 240px;
+  background: #f6f5f1;
+  animation-delay: 1.8s;
+}
+
+.auth-tile[data-tile="4"] {
+  top: 0;
+  right: 240px;
+  background: #fa520f;
+  animation-delay: 2.7s;
+}
+
+@keyframes auth-tile-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-tile {
+    animation: none;
+    opacity: 0;
+  }
 }

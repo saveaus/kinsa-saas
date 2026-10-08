@@ -3,11 +3,13 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { requestAppUrl } from "@/lib/request-app-url"
+import { isValidAbn, parseAbn } from "@/lib/abn"
 import { parseRegistrationGroups } from "@/lib/ndis-registration-groups"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requireAuthUser } from "@/lib/tenant"
+import { recordAudit } from "@/modules/audit/write"
+import { sendPasswordReset, sendSignupConfirmation } from "@/modules/identity/confirm-link"
 import { hashToken } from "@/modules/identity/token"
 import { peekInvite } from "@/modules/identity/queries"
 
@@ -50,7 +52,11 @@ export async function signUpAction(
     .trim()
     .toLowerCase()
   const password = String(formData.get("password") ?? "")
-  const fullName = String(formData.get("full_name") ?? "").trim()
+  const fullName = personName(formData)
+
+  if (!fullName) {
+    return { error: "Enter your name." }
+  }
 
   if (!email || !password || password.length < 8) {
     return {
@@ -60,28 +66,12 @@ export async function signUpAction(
 
   await assertRateLimit(`signup:${email}:${await clientIp()}`, 5, 600)
 
-  const supabase = await createServerSupabase()
-  const origin = await requestAppUrl()
-  const { data, error } = await supabase.auth.signUp({
+  return sendSignupConfirmation({
     email,
     password,
-    options: {
-      data: { full_name: fullName },
-      emailRedirectTo: `${origin}/login`,
-    },
+    fullName,
+    next: "/onboarding",
   })
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  if (!data.session) {
-    return {
-      message: "Check your email to confirm your account, then sign in.",
-    }
-  }
-
-  redirect("/onboarding")
 }
 
 export async function signOutAction() {
@@ -101,15 +91,7 @@ export async function requestPasswordResetAction(
 
   await assertRateLimit(`reset:${email}:${await clientIp()}`, 5, 600)
 
-  const supabase = await createServerSupabase()
-  const origin = await requestAppUrl()
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/reset-password`,
-  })
-  if (error) return { error: error.message }
-  return {
-    message: "If that email has an account, a reset link is on its way.",
-  }
+  return sendPasswordReset(email)
 }
 
 export async function updatePasswordAction(
@@ -131,14 +113,30 @@ export async function updatePasswordAction(
   return { message: "Password updated. You can sign in with it now." }
 }
 
+const LOGO_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+}
+
+const MAX_LOGO_BYTES = 2 * 1024 * 1024
+
+function personName(formData: FormData) {
+  const first = String(formData.get("first_name") ?? "").trim()
+  const last = String(formData.get("last_name") ?? "").trim()
+  const combined = [first, last].filter(Boolean).join(" ")
+  return combined || String(formData.get("full_name") ?? "").trim()
+}
+
 export async function createOrganisationAction(
   _prev: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
   await requireAuthUser()
   const name = String(formData.get("name") ?? "").trim()
-  if (!name) {
-    return { error: "Organisation name is required." }
+  if (!name || name.length > 200) {
+    return { error: "Enter the organisation name." }
   }
 
   const registrationGroups = parseRegistrationGroups(formData)
@@ -146,17 +144,84 @@ export async function createOrganisationAction(
     return { error: "Select at least one NDIS registration group." }
   }
 
+  const abnRaw = String(formData.get("abn") ?? "").trim()
+  let abn: string | null = null
+  if (abnRaw) {
+    const parsed = parseAbn(abnRaw)
+    if (!parsed || !isValidAbn(parsed)) {
+      return { error: "Enter a valid 11-digit Australian Business Number." }
+    }
+    abn = parsed
+  }
+
+  const registration = String(formData.get("registration_number") ?? "").trim()
+  if (registration && (registration.length < 4 || registration.length > 40)) {
+    return { error: "Enter the NDIS registration number, or leave it blank." }
+  }
+
+  const logo = formData.get("logo")
+  let logoFile: File | null = null
+  if (logo instanceof File && logo.size > 0) {
+    if (logo.size > MAX_LOGO_BYTES) return { error: "Logo must be under 2 MB." }
+    if (!LOGO_EXTENSIONS[logo.type]) {
+      return { error: "Use a PNG, JPG, GIF, or WebP image." }
+    }
+    logoFile = logo
+  }
+
   const supabase = await createServerSupabase()
-  const { data: organisationId, error } = await supabase.rpc(
-    "create_organisation",
-    {
+  const { data: existing, error: membershipError } = await supabase
+    .from("memberships")
+    .select("organisation_id")
+    .limit(1)
+    .maybeSingle()
+  if (membershipError) return { error: membershipError.message }
+
+  let organisationId = existing?.organisation_id ?? null
+  if (!organisationId) {
+    const { data, error } = await supabase.rpc("create_organisation", {
       org_name: name,
       p_registration_groups: registrationGroups,
+    })
+    if (error || !data) {
+      return { error: error?.message ?? "Could not create the organisation." }
     }
-  )
-  if (error || !organisationId) {
-    return { error: error?.message ?? "Could not create the organisation." }
+    organisationId = data
   }
+
+  const { error: updateError } = await supabase
+    .from("organisations")
+    .update({
+      name,
+      abn,
+      registration_number: registration || null,
+      registration_groups: registrationGroups,
+    })
+    .eq("id", organisationId)
+  if (updateError) return { error: updateError.message }
+
+  if (logoFile) {
+    const extension = LOGO_EXTENSIONS[logoFile.type]
+    const path = `${organisationId}/logo.${extension}`
+    const bytes = new Uint8Array(await logoFile.arrayBuffer())
+    const { error: uploadError } = await supabase.storage
+      .from("organisation-logos")
+      .upload(path, bytes, { contentType: logoFile.type, upsert: true })
+    if (uploadError) return { error: uploadError.message }
+
+    const { error: logoError } = await supabase
+      .from("organisations")
+      .update({ logo_path: path })
+      .eq("id", organisationId)
+    if (logoError) return { error: logoError.message }
+  }
+
+  await recordAudit("organisation.identity_updated", "organisation", organisationId, {
+    abn: Boolean(abn),
+    registration: Boolean(registration),
+    registrationGroups: registrationGroups.length,
+    logo: Boolean(logoFile),
+  })
 
   redirect("/dashboard")
 }
@@ -191,33 +256,16 @@ export async function acceptInviteAction(
     if (!password || password.length < 8) {
       return { error: "Use a password of at least 8 characters." }
     }
-    const origin = await requestAppUrl()
-    const signedUp = await supabase.auth.signUp({
+    const signedUp = await sendSignupConfirmation({
       email,
       password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${origin}/invite/${token}`,
-      },
+      fullName,
+      next: `/invite/${token}`,
     })
+    if (signedUp.message) return signedUp
     if (signedUp.error) {
-      const signedIn = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      if (signedIn.error) return { error: signedUp.error.message }
-    } else if (!signedUp.data.session) {
-      const identities = signedUp.data.user?.identities ?? []
-      if (signedUp.data.user && identities.length === 0) {
-        return {
-          error:
-            "An account with this email already exists. Sign in, then open this invite again.",
-        }
-      }
-      return {
-        message:
-          "Confirm the email we just sent. Open it in this browser, and you will come back here to join.",
-      }
+      const signedIn = await supabase.auth.signInWithPassword({ email, password })
+      if (signedIn.error) return { error: signedUp.error }
     }
   }
 

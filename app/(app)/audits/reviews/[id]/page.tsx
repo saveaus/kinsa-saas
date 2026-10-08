@@ -11,6 +11,7 @@ import { getAssistantChat } from "@/modules/assistant/chats"
 import { allowsRegistered } from "@/modules/billing/access"
 import { getOrganisationBilling } from "@/modules/billing/queries"
 import { stripeConfigured } from "@/modules/billing/stripe"
+import { loadAssistantUpgrade } from "@/modules/assistant/usage"
 
 export default async function InternalAuditReviewPage({
   params,
@@ -59,13 +60,17 @@ export default async function InternalAuditReviewPage({
     )
   }
 
-  const chat = await getAssistantChat(context, id)
+  const [chat, upgrade] = await Promise.all([
+    getAssistantChat(context, id),
+    loadAssistantUpgrade(context.organisationId, manage),
+  ])
   if (!chat || chat.purpose !== "internal_audit") notFound()
   return (
     <AssistantChat
       chat={chat}
       mode="internal_audit"
       auditChoices={registrationGroupChoices(context.organisationRegistrationGroups)}
+      upgrade={upgrade}
     />
   )
 }

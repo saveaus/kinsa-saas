@@ -8,10 +8,13 @@ import {
   ClipboardCheck,
   FileDown,
   FileText,
+  ScrollText,
   KeyRound,
   LayoutDashboard,
+  ListTodo,
   Settings,
   Shield,
+  Sparkles,
   SunMoon,
   UserRound,
   Users,
@@ -39,7 +42,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { AssistantNav } from "@/components/assistant-nav"
 import { OrgMark } from "@/components/org-mark"
 import {
   SidebarGroup,
@@ -53,7 +55,6 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "cn"
 import { signOutAction } from "@/modules/identity/actions"
-import type { AssistantChatLink } from "@/modules/assistant/chats"
 
 type NavItem = {
   href: string
@@ -66,6 +67,14 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
     {
       items: [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/assistant", label: "Assistant", icon: Sparkles },
+      ],
+    },
+    {
+      label: "Work",
+      items: [
+        { href: "/tasks", label: "Tasks", icon: ListTodo },
+        { href: "/approvals", label: "Approvals", icon: BadgeCheck },
       ],
     },
     {
@@ -73,8 +82,8 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
       items: [
         { href: "/workers", label: "Workers", icon: Users },
         { href: "/participants", label: "Participants", icon: UserRound },
-        { href: "/approvals", label: "Approvals", icon: BadgeCheck },
         { href: "/policies", label: "Policies", icon: FileText },
+        { href: "/logs", label: "Logs", icon: ScrollText },
       ],
     },
     {
@@ -90,6 +99,8 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
 
 const workerItems: NavItem[] = [
   { href: "/me", label: "Compliance", icon: Shield },
+  { href: "/assistant", label: "Assistant", icon: Sparkles },
+  { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/audits", label: "Audits", icon: ClipboardCheck },
   { href: "/me/documents", label: "Documents", icon: BadgeCheck },
 ]
@@ -312,34 +323,15 @@ export function WorkspaceHeader({
   )
 }
 
-export function AppNav({
-  admin,
-  chats,
-}: {
-  admin: boolean
-  chats: AssistantChatLink[]
-}) {
+export function AppNav({ admin }: { admin: boolean }) {
   const pathname = usePathname()
 
   if (!admin) {
-    const [home, ...rest] = workerItems
     return (
       <SidebarGroup className="py-1">
         <SidebarGroupContent>
           <SidebarMenu>
-            {home ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isActive(pathname, home.href)}
-                  render={<Link href={home.href} />}
-                >
-                  <NavIcon icon={home.icon} />
-                  <span>{home.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : null}
-            <AssistantNav chats={chats} pathname={pathname} />
-            {rest.map((item) => (
+            {workerItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   isActive={isActive(pathname, item.href)}
@@ -381,7 +373,6 @@ export function AppNav({
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  <AssistantNav chats={chats} pathname={pathname} />
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

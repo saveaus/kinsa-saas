@@ -39,8 +39,8 @@ export type LogEntryRow = {
   worker_id: string | null
   worker_name: string | null
   status: "draft" | "accepted"
-  original_filename: string
-  mime_type: string
+  original_filename: string | null
+  mime_type: string | null
   drafted_by: "person" | "assistant"
 }
 
@@ -99,6 +99,156 @@ export async function getLogRegister(context: TenantContext, id: string) {
   if (!data) return null
   const [named] = await withPersonNames([data])
   return named ?? null
+}
+
+export async function listCustomLogs(context: TenantContext) {
+  const logs = (await listLogRegisters(context)).filter((log) => !log.built_in)
+  if (logs.length === 0) return []
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from("log_entries")
+    .select("register_id")
+    .eq("organisation_id", context.organisationId)
+    .in(
+      "register_id",
+      logs.map((log) => log.id)
+    )
+  if (error) throw new Error(error.message)
+  const counts = new Map<string, number>()
+  for (const row of data ?? []) {
+    counts.set(row.register_id, (counts.get(row.register_id) ?? 0) + 1)
+  }
+  return logs.map((log) => ({
+    ...log,
+    entryCount: counts.get(log.id) ?? 0,
+  }))
+}
+
+export type SavedLogFile = { id: string; name: string; href: string }
+
+export type SavedLogEntry = {
+  id: string
+  summary: string
+  occurredOn: string
+  dueOn: string | null
+  remind: boolean
+  people: string
+  files: SavedLogFile[]
+}
+
+export async function listSavedEntries(
+  context: TenantContext,
+  registerId: string
+): Promise<SavedLogEntry[]> {
+  const supabase = await createServerSupabase()
+  const { data: entries, error } = await supabase
+    .from("log_entries")
+    .select(
+      "id, summary, occurred_on, due_on, remind, participant_id, worker_id, storage_path, original_filename"
+    )
+    .eq("organisation_id", context.organisationId)
+    .eq("register_id", registerId)
+    .order("occurred_on", { ascending: false })
+  if (error) throw new Error(error.message)
+  const rows = entries ?? []
+  if (rows.length === 0) return []
+  const ids = rows.map((entry) => entry.id)
+  const [peopleResult, filesResult] = await Promise.all([
+    supabase
+      .from("log_entry_people")
+      .select("entry_id, participant_id, worker_id")
+      .eq("organisation_id", context.organisationId)
+      .in("entry_id", ids),
+    supabase
+      .from("log_entry_files")
+      .select("id, entry_id, original_filename")
+      .eq("organisation_id", context.organisationId)
+      .in("entry_id", ids),
+  ])
+  if (peopleResult.error) throw new Error(peopleResult.error.message)
+  if (filesResult.error) throw new Error(filesResult.error.message)
+
+  const participantIds = new Set<string>()
+  const workerIds = new Set<string>()
+  for (const row of rows) {
+    if (row.participant_id) participantIds.add(row.participant_id)
+    if (row.worker_id) workerIds.add(row.worker_id)
+  }
+  for (const row of peopleResult.data ?? []) {
+    if (row.participant_id) participantIds.add(row.participant_id)
+    if (row.worker_id) workerIds.add(row.worker_id)
+  }
+  const names = new Map<string, string>()
+  if (participantIds.size > 0) {
+    const { data, error: nameError } = await supabase
+      .from("participants")
+      .select("id, name")
+      .in("id", [...participantIds])
+    if (nameError) throw new Error(nameError.message)
+    for (const person of data ?? []) names.set(person.id, person.name)
+  }
+  if (workerIds.size > 0) {
+    const { data, error: nameError } = await supabase
+      .from("workers")
+      .select("id, first_name, last_name")
+      .in("id", [...workerIds])
+    if (nameError) throw new Error(nameError.message)
+    for (const worker of data ?? []) {
+      names.set(worker.id, `${worker.first_name} ${worker.last_name}`)
+    }
+  }
+
+  return rows.map((entry) => {
+    const linked = new Set<string>()
+    if (entry.participant_id) linked.add(entry.participant_id)
+    if (entry.worker_id) linked.add(entry.worker_id)
+    for (const row of peopleResult.data ?? []) {
+      if (row.entry_id !== entry.id) continue
+      const id = row.participant_id ?? row.worker_id
+      if (id) linked.add(id)
+    }
+    const people = [...linked].map((id) => names.get(id) ?? "Person")
+    const files: SavedLogFile[] = []
+    if (entry.storage_path && entry.original_filename) {
+      files.push({
+        id: entry.id,
+        name: entry.original_filename,
+        href: `/api/logs/${entry.id}`,
+      })
+    }
+    for (const file of filesResult.data ?? []) {
+      if (file.entry_id !== entry.id) continue
+      files.push({
+        id: file.id,
+        name: file.original_filename,
+        href: `/api/logs/attachments/${file.id}`,
+      })
+    }
+    return {
+      id: entry.id,
+      summary: entry.summary,
+      occurredOn: entry.occurred_on,
+      dueOn: entry.due_on,
+      remind: entry.remind,
+      people: people.join(", ") || "—",
+      files,
+    }
+  })
+}
+
+export async function getLogAttachment(
+  context: TenantContext,
+  fileId: string
+) {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from("log_entry_files")
+    .select("id, entry_id, storage_path, original_filename, mime_type")
+    .eq("id", fileId)
+    .eq("organisation_id", context.organisationId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data
 }
 
 export async function listLogEntries(
@@ -192,6 +342,7 @@ export async function listEvidenceEntries(
     const extraFiles = (filesResult.data ?? []).flatMap((row) =>
       row.entry_id === entry.id ? [row.original_filename] : []
     )
+    const ownFile = entry.original_filename ? [entry.original_filename] : []
     const extraDates = (datesResult.data ?? []).flatMap((row) =>
       row.entry_id === entry.id
         ? [{ label: row.label, occurredOn: row.occurred_on }]
@@ -203,7 +354,7 @@ export async function listEvidenceEntries(
       occurredOn: entry.occurred_on,
       extraDates,
       people: people.join(", ") || "—",
-      files: [entry.original_filename, ...extraFiles].join(", "),
+      files: [...ownFile, ...extraFiles].join(", ") || "—",
     }
   })
 }

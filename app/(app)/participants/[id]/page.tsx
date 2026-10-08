@@ -14,8 +14,13 @@ import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { requireRegistered } from "@/modules/billing/guard"
 import { listParticipantIncidents } from "@/modules/incidents/queries"
-import { listLogRegisters, listPersonLogEntries } from "@/modules/logs/queries"
-import { logShown } from "@/modules/logs/standing"
+import { ProfileLogs } from "@/components/profile-logs"
+import {
+  listCustomLogs,
+  listLogRegisters,
+  listPersonLogEntries,
+} from "@/modules/logs/queries"
+import { logOnPerson, logShown } from "@/modules/logs/standing"
 import {
   incidentListPath,
   incidentRegisterTitle,
@@ -149,11 +154,12 @@ export default async function ParticipantPage({
   await requireRegistered(context)
   const participant = await getParticipant(context, id)
   if (!participant) notFound()
-  const [files, incidents, logs, entries] = await Promise.all([
+  const [files, incidents, logs, entries, customLogs] = await Promise.all([
     listParticipantFiles(context, id),
     listParticipantIncidents(context, id),
     listLogRegisters(context),
     listPersonLogEntries(context, { participantId: id }),
+    listCustomLogs(context),
   ])
   const accepted =
     files.some((file) => file.status === "accepted") ||
@@ -175,6 +181,11 @@ export default async function ParticipantPage({
           NDIS {participant.ndis_number}
         </p>
       </div>
+      <ProfileLogs
+        logs={customLogs.filter((log) =>
+          logOnPerson(log, { participantId: participant.id })
+        )}
+      />
       {accepted ? null : (
         <div className="flex flex-wrap gap-2">
           <ActionForm

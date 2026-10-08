@@ -18,7 +18,9 @@ export async function LogFilePage({ slug, id }: { slug: string; id: string }) {
     !register ||
     !register.visible ||
     register.slug !== slug ||
-    register.built_in
+    register.built_in ||
+    !entry.mime_type ||
+    !entry.original_filename
   ) {
     notFound()
   }

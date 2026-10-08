@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 
 import { AssistantPrompt } from "@/components/assistant-prompt"
+import { NdisUpdates } from "@/components/ndis-updates"
 import { AttioReport } from "@/components/attio-report"
 import { BackLink } from "@/components/back-link"
 import { AuditPackCheck } from "@/components/audit-pack-check"
@@ -49,6 +50,7 @@ export default async function DashboardPage({
             ) : undefined
           }
         />
+        <NdisUpdates />
       </div>
     )
   }
@@ -154,6 +156,7 @@ export default async function DashboardPage({
           moreHref={showAll ? undefined : "/dashboard?check=all"}
         />
       ) : null}
+      <NdisUpdates />
     </div>
   )
 }

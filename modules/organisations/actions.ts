@@ -8,7 +8,7 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
 
-export type OrganisationActionState = { error?: string; message?: string }
+export type OrganisationActionState = { error?: string; message?: string; href?: string }
 
 const LOGO_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -22,6 +22,7 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024
 function refreshWorkspace() {
   revalidatePath("/", "layout")
   revalidatePath("/settings/general")
+  revalidatePath("/settings/registration-groups")
 }
 
 export async function uploadOrganisationLogoAction(
@@ -116,7 +117,6 @@ export async function updateOrganisationIdentityAction(
   const name = String(formData.get("name") ?? "").trim()
   const abnRaw = String(formData.get("abn") ?? "").trim()
   const registration = String(formData.get("registration_number") ?? "").trim()
-  const registrationGroups = parseRegistrationGroups(formData)
 
   if (!name || name.length > 200) {
     return { error: "Enter the business name as it should appear on certificates." }
@@ -135,10 +135,6 @@ export async function updateOrganisationIdentityAction(
     return { error: "Enter the NDIS registration number, or leave it blank." }
   }
 
-  if (registrationGroups.length === 0) {
-    return { error: "Select at least one NDIS registration group." }
-  }
-
   const supabase = await createServerSupabase()
   const { error } = await supabase
     .from("organisations")
@@ -146,7 +142,6 @@ export async function updateOrganisationIdentityAction(
       name,
       abn,
       registration_number: registration || null,
-      registration_groups: registrationGroups,
     })
     .eq("id", context.organisationId)
   if (error) return { error: error.message }
@@ -154,8 +149,36 @@ export async function updateOrganisationIdentityAction(
   await recordAudit("organisation.identity_updated", "organisation", context.organisationId, {
     abn: Boolean(abn),
     registration: Boolean(registration),
-    registrationGroups: registrationGroups.length,
   })
   refreshWorkspace()
   return { message: "Business details saved. They will appear on training certificates." }
+}
+
+export async function updateRegistrationGroupsAction(
+  _prev: OrganisationActionState,
+  formData: FormData
+): Promise<OrganisationActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+
+  const registrationGroups = parseRegistrationGroups(formData)
+  if (registrationGroups.length === 0) {
+    return { error: "Select at least one NDIS registration group." }
+  }
+
+  const supabase = await createServerSupabase()
+  const { error } = await supabase
+    .from("organisations")
+    .update({ registration_groups: registrationGroups })
+    .eq("id", context.organisationId)
+  if (error) return { error: error.message }
+
+  await recordAudit("organisation.registration_groups_updated", "organisation", context.organisationId, {
+    registrationGroups: registrationGroups.length,
+  })
+  refreshWorkspace()
+  return {
+    message: "Registration groups saved.",
+    href: "/settings/general",
+  }
 }

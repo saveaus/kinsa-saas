@@ -34,6 +34,7 @@ export type IncidentKind =
   "incident" | "complaint" | "risk" | "restrictive_practice"
 export type IncidentStatus = "draft" | "accepted"
 export type SupportPlanCheckStatus = "draft" | "accepted"
+export type StaffTaskStatus = "open" | "done"
 
 export type Database = {
   public: {
@@ -153,15 +154,18 @@ export type Database = {
       assistant_usage: {
         Row: {
           organisation_id: string
+          period_start: string
           tokens_used: number
           updated_at: string
         }
         Insert: {
           organisation_id: string
+          period_start?: string
           tokens_used?: number
           updated_at?: string
         }
         Update: {
+          period_start?: string
           tokens_used?: number
           updated_at?: string
         }
@@ -404,6 +408,8 @@ export type Database = {
           template_key: string | null
           category: string | null
           file_id: string | null
+          compliance_flagged: boolean
+          compliance_note: string | null
           created_by: string | null
           accepted_by: string | null
           accepted_at: string | null
@@ -426,6 +432,8 @@ export type Database = {
           template_key?: string | null
           category?: string | null
           file_id?: string | null
+          compliance_flagged?: boolean
+          compliance_note?: string | null
           created_by?: string | null
           accepted_by?: string | null
           accepted_at?: string | null
@@ -595,6 +603,47 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_tasks: {
+        Row: {
+          id: string
+          organisation_id: string
+          title: string
+          detail: string | null
+          assignee_id: string
+          created_by: string | null
+          status: StaffTaskStatus
+          due_on: string | null
+          policy_id: string | null
+          changes: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          title: string
+          detail?: string | null
+          assignee_id: string
+          policy_id?: string | null
+          changes?: string | null
+          created_by?: string | null
+          status?: StaffTaskStatus
+          due_on?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          title?: string
+          detail?: string | null
+          assignee_id?: string
+          status?: StaffTaskStatus
+          due_on?: string | null
+          completed_at?: string | null
+        }
+        Relationships: []
+      }
       support_plan_checks: {
         Row: {
           id: string
@@ -722,10 +771,13 @@ export type Database = {
           participant_id: string | null
           worker_id: string | null
           status: IncidentStatus
-          storage_path: string
-          original_filename: string
-          mime_type: string
-          file_size_bytes: number
+          storage_path: string | null
+          original_filename: string | null
+          mime_type: string | null
+          file_size_bytes: number | null
+          due_on: string | null
+          remind: boolean
+          reminded_at: string | null
           drafted_by: PolicyDrafter
           created_by: string | null
           accepted_by: string | null
@@ -742,10 +794,13 @@ export type Database = {
           participant_id?: string | null
           worker_id?: string | null
           status?: IncidentStatus
-          storage_path: string
-          original_filename: string
-          mime_type: string
-          file_size_bytes: number
+          storage_path?: string | null
+          original_filename?: string | null
+          mime_type?: string | null
+          file_size_bytes?: number | null
+          due_on?: string | null
+          remind?: boolean
+          reminded_at?: string | null
           drafted_by?: PolicyDrafter
           created_by?: string | null
           accepted_by?: string | null
@@ -755,6 +810,7 @@ export type Database = {
           status?: IncidentStatus
           accepted_by?: string | null
           accepted_at?: string | null
+          reminded_at?: string | null
         }
         Relationships: []
       }
@@ -1153,6 +1209,10 @@ export type Database = {
         Args: { p_organisation_id: string; p_tokens: number }
         Returns: undefined
       }
+      claim_assistant_trial_tokens: {
+        Args: { p_organisation_id: string; p_tokens: number }
+        Returns: number
+      }
     }
     Enums: {
       app_permission: AppPermission
@@ -1167,6 +1227,7 @@ export type Database = {
       incident_kind: IncidentKind
       incident_status: IncidentStatus
       support_plan_check_status: SupportPlanCheckStatus
+      staff_task_status: StaffTaskStatus
       staff_role: StaffRole
       worker_employment_status: WorkerEmploymentStatus
     }

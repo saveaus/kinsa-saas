@@ -15,6 +15,7 @@ import {
 } from "@/modules/assistant/tasks"
 import { registeredError } from "@/modules/billing/guard"
 import { categoryForStandard } from "@/modules/policies/categories"
+import { reviewAddedPolicy } from "@/modules/policies/compliance"
 import { syncSubscriptionSeats } from "@/modules/billing/stripe"
 import { reviewPendingDocuments } from "@/modules/documents/assist"
 import { listTeams } from "@/modules/teams/queries"
@@ -62,16 +63,16 @@ export async function confirmAssistantTask(
 
 async function confirmDocumentReview(organisationId: string) {
   const reviewed = await reviewPendingDocuments(organisationId)
-  const approved = reviewed.filter((item) => item.decision === "approve").length
   const flagged = reviewed.filter((item) => item.decision === "flag").length
   revalidatePath("/documents")
   revalidatePath("/dashboard")
   if (reviewed.length === 0)
     return { message: "No pending documents to check." }
-  const approvedText = approved === 1 ? "1 approved" : `${approved} approved`
   const flaggedText =
-    flagged === 1 ? "1 flagged for a person" : `${flagged} flagged for a person`
-  return { message: `${approvedText}. ${flaggedText}.` }
+    flagged === 1
+      ? "1 document needs a person to approve it."
+      : `${flagged} documents need a person to approve them.`
+  return { message: flaggedText }
 }
 
 async function confirmWorker(
@@ -128,6 +129,15 @@ async function confirmPolicy(
     return { error: "That practice standard already has a policy." }
 
   const policyId = crypto.randomUUID()
+  const body = policyRecordBody(task.draft)
+  const compliance = await reviewAddedPolicy({
+    organisationId: context.organisationId,
+    standardCode: task.standardCode,
+    filename: `${task.draft.title}.txt`,
+    mimeType: "text/plain",
+    bytes: null,
+    text: body,
+  })
   const { error } = await supabase.from("policies").insert({
     id: policyId,
     organisation_id: context.organisationId,
@@ -136,7 +146,9 @@ async function confirmPolicy(
     category: categoryForStandard(task.standardCode),
     review_on: format(addYears(new Date(), 1), "yyyy-MM-dd"),
     status: "draft",
-    body: policyRecordBody(task.draft),
+    body,
+    compliance_flagged: compliance.flagged,
+    compliance_note: compliance.note,
     storage_path: null,
     original_filename: null,
     mime_type: null,
@@ -153,10 +165,18 @@ async function confirmPolicy(
     standardCode: task.standardCode,
     draftedBy: "assistant",
   })
+  if (compliance.flagged) {
+    await recordAudit("policy.flagged", "policy", policyId, {
+      name: task.draft.title,
+      standardCode: task.standardCode,
+    })
+  }
   revalidatePath("/policies")
   revalidatePath("/dashboard")
   revalidatePath("/activity")
   return {
-    message: `${task.draft.title} saved as a draft. It does not count until someone accepts it.`,
+    message: compliance.flagged
+      ? `${task.draft.title} saved as a draft. It is flagged because it does not meet the current standard.`
+      : `${task.draft.title} saved as a draft. It does not count until someone accepts it.`,
   }
 }

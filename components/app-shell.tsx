@@ -19,7 +19,6 @@ import {
 import { formatPersonLabel } from "@/lib/person-name"
 import { can, type TenantContext } from "@/lib/tenant"
 import type { BillingNotice } from "@/modules/billing/access"
-import { listAssistantChats } from "@/modules/assistant/chats"
 import { signOutAction } from "@/modules/identity/actions"
 export async function AppShell({
   context,
@@ -31,7 +30,6 @@ export async function AppShell({
   billingNotice?: BillingNotice | null
 }) {
   const admin = can(context, "workers.read_all")
-  const chats = await listAssistantChats(context)
   const personLabel = context.fullName
     ? formatPersonLabel(context.fullName)
     : context.email
@@ -52,7 +50,7 @@ export async function AppShell({
           admin={admin}
         />
         <SidebarContent>
-          <AppNav admin={admin} chats={chats} />
+          <AppNav admin={admin} />
         </SidebarContent>
         <SidebarFooter className="gap-1">
           <AppFooterNav admin={admin} />

@@ -1,32 +1,61 @@
 import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { createServerSupabase } from "@/lib/supabase/server"
-import { assistantAllowance } from "@/modules/assistant/allowance"
-import { getOrganisationBilling } from "@/modules/billing/queries"
+import {
+  assistantAllowance,
+  assistantUpgrade,
+  countedAssistantTokens,
+} from "@/modules/assistant/allowance"
+import { billedSeats } from "@/modules/billing/access"
+import { countActiveWorkers, getOrganisationBilling } from "@/modules/billing/queries"
 import { stripeConfigured } from "@/modules/billing/stripe"
 
-export async function assistantTokensUsed(organisationId: string) {
+async function readAssistantUsage(organisationId: string) {
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from("assistant_usage")
-    .select("tokens_used")
+    .select("tokens_used, period_start")
     .eq("organisation_id", organisationId)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
-  return data?.tokens_used ?? 0
+  return {
+    tokensUsed: data?.tokens_used ?? 0,
+    periodStart: data?.period_start ?? null,
+  }
+}
+
+export async function assistantTokensUsed(organisationId: string) {
+  const [billing, usage] = await Promise.all([
+    getOrganisationBilling(organisationId),
+    readAssistantUsage(organisationId),
+  ])
+  return countedAssistantTokens({ billing, ...usage })
 }
 
 export async function loadAssistantAllowance(organisationId: string) {
-  const [billing, tokensUsed] = await Promise.all([
+  const [billing, usage, workers] = await Promise.all([
     getOrganisationBilling(organisationId),
-    assistantTokensUsed(organisationId),
+    readAssistantUsage(organisationId),
+    countActiveWorkers(organisationId),
   ])
 
   return assistantAllowance({
     billing,
-    tokensUsed,
+    tokensUsed: usage.tokensUsed,
+    periodStart: usage.periodStart,
+    seats: billedSeats(workers),
     stripeConfigured: stripeConfigured(),
   })
+}
+
+export async function loadAssistantUpgrade(
+  organisationId: string,
+  canManageBilling: boolean
+) {
+  return assistantUpgrade(
+    await loadAssistantAllowance(organisationId),
+    canManageBilling
+  )
 }
 
 export async function recordAssistantTokens(organisationId: string, tokens: number) {
@@ -37,4 +66,15 @@ export async function recordAssistantTokens(organisationId: string, tokens: numb
     p_tokens: tokens,
   })
   if (error) throw new Error(error.message)
+}
+
+export async function claimAssistantTrialTokens(organisationId: string, tokens: number) {
+  if (tokens <= 0 || !hasAdminClient()) return 0
+  const admin = createAdminSupabase()
+  const { data, error } = await admin.rpc("claim_assistant_trial_tokens", {
+    p_organisation_id: organisationId,
+    p_tokens: tokens,
+  })
+  if (error) throw new Error(error.message)
+  return data ?? 0
 }

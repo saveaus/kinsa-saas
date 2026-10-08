@@ -174,7 +174,7 @@ export function CredentialTeams({
   if (!team) {
     return (
       <p className="text-sm text-muted-foreground">
-        Create a team under Roles and permissions before choosing credentials.
+        Create a team under Teams before choosing credentials.
       </p>
     )
   }

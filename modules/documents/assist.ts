@@ -3,8 +3,8 @@ import { z } from "zod"
 
 import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { recordAudit } from "@/modules/audit/write"
-import { assistantModel } from "@/modules/assistant/model"
-import { loadAssistantAllowance, recordAssistantTokens } from "@/modules/assistant/usage"
+import { assistantModel, assistantTemperature } from "@/modules/assistant/model"
+import { claimAssistantTrialTokens, loadAssistantAllowance } from "@/modules/assistant/usage"
 import {
   assistantDocumentDecision,
   type DocumentDecision,
@@ -91,12 +91,17 @@ async function reviewDocuments(organisationId: string, documentIds: string[]) {
   const documents = (data ?? []) as unknown as PendingDocument[]
   const results = []
   for (const document of documents) {
-    results.push(await reviewOne(organisationId, document, allowance.kind === "trial"))
+    const meter = allowance.kind === "trial" || allowance.kind === "included" ? allowance.kind : "open"
+    results.push(await reviewOne(organisationId, document, meter))
   }
   return results
 }
 
-async function reviewOne(organisationId: string, document: PendingDocument, meterTrial: boolean) {
+async function reviewOne(
+  organisationId: string,
+  document: PendingDocument,
+  meter: "trial" | "included" | "open"
+) {
   const worker = one(document.workers)
   const type = one(document.document_type_versions)
   const workerName = worker ? `${worker.first_name} ${worker.last_name}` : "the worker"
@@ -110,7 +115,7 @@ async function reviewOne(organisationId: string, document: PendingDocument, mete
       workerName,
       typeName,
       requiresExpiry: type?.requires_expiry ?? false,
-      meterTrial,
+      meter,
     })
     const decision = assistantDocumentDecision({
       read,
@@ -119,7 +124,7 @@ async function reviewOne(organisationId: string, document: PendingDocument, mete
       today: today(),
     })
     await saveDecision(organisationId, document.id, decision)
-    return { ...base, decision: decision.decision, note: decision.note }
+    return { ...base, decision: "flag" as const, note: decision.note }
   } catch (error) {
     console.error("document review", error)
     return { ...base, decision: "skipped" as const, note: null }
@@ -132,7 +137,7 @@ async function readDocument(input: {
   workerName: string
   typeName: string
   requiresExpiry: boolean
-  meterTrial: boolean
+  meter: "trial" | "included" | "open"
 }): Promise<DocumentRead> {
   const admin = createAdminSupabase()
   const downloaded = await admin.storage.from("worker-documents").download(input.document.storage_path)
@@ -148,9 +153,36 @@ async function readDocument(input: {
   }
 
   const bytes = new Uint8Array(await downloaded.data.arrayBuffer())
+  if (input.meter === "trial" && bytes.length > 1_500_000) {
+    return {
+      readable: false,
+      typeMatches: false,
+      nameMatches: false,
+      confident: false,
+      expirySeen: "missing",
+      note: "This file is too large for the trial assistant. A person needs to check it.",
+    }
+  }
+  if (input.meter === "trial" || input.meter === "included") {
+    const granted = await claimAssistantTrialTokens(input.organisationId, 4_000)
+    if (granted <= 0) {
+      return {
+        readable: false,
+        typeMatches: false,
+        nameMatches: false,
+        confident: false,
+        expirySeen: "missing",
+        note:
+          input.meter === "trial"
+            ? "The trial assistant allowance is used. A person needs to check this file."
+            : "This month's assistant allowance is used. A person needs to check this file.",
+      }
+    }
+  }
   const expiry = input.document.expires_on ?? "none entered"
   const result = await generateText({
     model: assistantModel,
+    temperature: assistantTemperature,
     maxOutputTokens: 300,
     output: Output.object({ schema: readSchema }),
     messages: [
@@ -182,13 +214,6 @@ async function readDocument(input: {
     ],
   })
 
-  if (input.meterTrial) {
-    const tokens = (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0)
-    await recordAssistantTokens(input.organisationId, tokens).catch((error: unknown) => {
-      console.error("assistant usage", error)
-    })
-  }
-
   if (!result.output) {
     return {
       readable: false,
@@ -213,17 +238,14 @@ async function saveDecision(
       const { error } = await admin
         .from("documents")
         .update({
-          approval_status: "approved",
-          flagged: false,
+          flagged: true,
           review_note: decision.note,
-          reviewed_by: null,
-          reviewed_at: new Date().toISOString(),
         })
         .eq("id", documentId)
         .eq("organisation_id", organisationId)
         .eq("approval_status", "pending")
       if (error) throw new Error(error.message)
-      await recordAudit("document.approved", "document", documentId, {
+      await recordAudit("document.flagged", "document", documentId, {
         source: "assistant",
         note: decision.note,
       })

@@ -1,5 +1,6 @@
 import {
   convertToModelMessages,
+  createUIMessageStream,
   createUIMessageStreamResponse,
   isStepCount,
   smoothStream,
@@ -12,18 +13,24 @@ import {
 import { z } from "zod"
 
 import { standardsForGroups } from "@/lib/ndis-practice-standards"
-import { can, getTenantContext } from "@/lib/tenant"
-import { expandAttachmentText } from "@/modules/assistant/attachment-text"
+import { can, getTenantContext, type TenantContext } from "@/lib/tenant"
 import { assistantAllowanceMessage } from "@/modules/assistant/allowance"
+import {
+  expandAttachmentText,
+  trialDataUrlLimit,
+} from "@/modules/assistant/attachment-text"
 import { assistantSnapshot } from "@/modules/assistant/context"
-import { loadAssistantAllowance, recordAssistantTokens } from "@/modules/assistant/usage"
+import {
+  claimAssistantTrialTokens,
+  loadAssistantAllowance,
+} from "@/modules/assistant/usage"
 import {
   assistantHistoryLimit,
   assistantModel,
-  assistantReplyTokens,
+  assistantReplyBudget,
+  assistantTemperature,
   interviewHistoryLimit,
   interviewReplyTokens,
-  policyReplyTokens,
 } from "@/modules/assistant/model"
 import { parsePolicyDraft } from "@/modules/assistant/policy"
 import { recordAreas, selectRecords } from "@/modules/assistant/records"
@@ -31,10 +38,28 @@ import { loadAssistantPackItems } from "@/modules/assistant/records-query"
 import { prepareAssistantSnapshot } from "@/modules/assistant/snapshot-query"
 import { snapshotViews } from "@/modules/assistant/snapshots"
 import {
+  assignmentRequest,
+  assignTasksInputSchema,
+  prepareComplianceAssignment,
+  prepareTaskAssignment,
+  type AssignmentRequest,
+} from "@/modules/assistant/assignments"
+import {
   assistantTaskInputSchema,
   prepareAssistantTask,
   type AssistantTaskKind,
 } from "@/modules/assistant/tasks"
+import { isPolicyFlagPrompt } from "@/modules/policies/flag-prompt"
+import {
+  complianceCountHeading,
+  complianceCountNote,
+} from "@/modules/tasks/lift"
+import {
+  loadComplianceCount,
+  loadComplianceLift,
+  loadComplianceTarget,
+} from "@/modules/tasks/load"
+import { listTaskAssignees } from "@/modules/tasks/queries"
 import { canConductInternalAudit } from "@/modules/internal-audits/access"
 import {
   chosenAuditGroups,
@@ -67,14 +92,22 @@ function assistantErrorText(error: unknown) {
   return "The assistant could not answer. Try again."
 }
 
-function recentMessages(messages: UIMessage[], limit: number, textLimit: number) {
-  return expandAttachmentText(messages.slice(-limit), textLimit)
+function recentMessages(
+  messages: UIMessage[],
+  limit: number,
+  textLimit: number,
+  fileLimit?: number
+) {
+  return expandAttachmentText(messages.slice(-limit), textLimit, fileLimit)
 }
 
 function readRequest(body: unknown) {
-  if (!body || typeof body !== "object") return { messages: null, chatId: null, audit: false }
+  if (!body || typeof body !== "object")
+    return { messages: null, chatId: null, audit: false }
   const record = body as Record<string, unknown>
-  const messages = Array.isArray(record.messages) ? (record.messages as UIMessage[]) : null
+  const messages = Array.isArray(record.messages)
+    ? (record.messages as UIMessage[])
+    : null
   const chatId = typeof record.chatId === "string" ? record.chatId : null
   const audit = record.mode === "internal_audit"
   return { messages, chatId, audit }
@@ -92,27 +125,38 @@ export async function POST(request: Request) {
     )
   }
 
-  const { messages: incoming, chatId, audit: requestedAudit } = readRequest(await request.json())
+  const {
+    messages: incoming,
+    chatId,
+    audit: requestedAudit,
+  } = readRequest(await request.json())
   if (!incoming || incoming.length === 0) {
     return Response.json({ error: "Send a message." }, { status: 400 })
   }
 
   const allowance = await loadAssistantAllowance(context.organisationId)
   if (allowance.kind === "spent" || allowance.kind === "ended") {
-    return new Response(assistantAllowanceMessage(allowance.kind), { status: 402 })
+    return new Response(assistantAllowanceMessage(allowance), { status: 402 })
   }
-  const meterTrial = allowance.kind === "trial"
 
-  const turn = chatId ? await interviewTurn(context, chatId) : { kind: "general" as const }
+  const turn = chatId
+    ? await interviewTurn(context, chatId)
+    : { kind: "general" as const }
   if (turn.kind === "missing") {
-    return Response.json({ error: "That interview could not be opened." }, { status: 404 })
+    return Response.json(
+      { error: "That interview could not be opened." },
+      { status: 404 }
+    )
   }
 
   const interview = turn.kind === "interview"
   const audit = turn.kind === "audit" || (!interview && requestedAudit)
   if (audit && !(await canConductInternalAudit(context))) {
     return Response.json(
-      { error: "An administrator on the Registered plan runs the internal audit." },
+      {
+        error:
+          "An administrator on the Registered plan runs the internal audit.",
+      },
       { status: 403 }
     )
   }
@@ -120,14 +164,19 @@ export async function POST(request: Request) {
   const canReviewDocuments = general && can(context, "documents.approve")
   const taskTeams =
     general && can(context, "workers.manage")
-      ? (await listTeams(context)).map((team) => ({ code: team.code, name: team.name }))
+      ? (await listTeams(context)).map((team) => ({
+          code: team.code,
+          name: team.name,
+        }))
       : []
   const taskStandards =
     general && can(context, "settings.manage")
-      ? standardsForGroups(context.organisationRegistrationGroups).map((standard) => ({
-          code: standard.code,
-          name: standard.name,
-        }))
+      ? standardsForGroups(context.organisationRegistrationGroups).map(
+          (standard) => ({
+            code: standard.code,
+            name: standard.name,
+          })
+        )
       : []
   const taskAllowed = [
     ...(canReviewDocuments ? (["review_documents"] as const) : []),
@@ -154,10 +203,14 @@ export async function POST(request: Request) {
           imageInstruction,
           "When asked to generate or draft a policy, call draft_policy once with the full policy. If they do not name one, draft the most important missing policy from the snapshot. Do not paste the policy into the chat. After the tool, say it is a Word draft and has not been filed.",
           "Use only the snapshot for facts about this organisation. Do not invent records or guarantee an audit pass.",
+          "When the customer asks how an NDIS update affects the organisation and includes an article title, link, and summary, answer from that summary and this organisation's registration groups. Say what they need to change and what does not apply. Do not add rules that are not in the summary.",
           "If the customer drops a staff list or certificates, talk through who will be added and which files will be filed. Do not say those records are in until the customer says they added them.",
           "Drafts do not count. If the snapshot does not say, say it is not in this snapshot.",
           taskAllowed.length > 0
             ? "When asked to add a worker, file a policy, or check pending documents, call propose_task once. Nothing is saved until they press Confirm. Do not say the change is done."
+            : "",
+          can(context, "workers.manage")
+            ? "When asked to create or assign a task, call assign_tasks once with kind task, a short title, and a one-line detail. Do not choose an assignee. When asked what to do to become more compliant, or to raise compliance by a percent, call assign_tasks once with kind compliance and lift set to that number of percentage points (20 if they said 20% more). Do not also call show_records or show_snapshot for that question. Do not list the tasks in the reply. The card is how they assign each task, or all of them. After the tool, one sentence. Do not say the tasks are assigned until they press Assign."
             : "",
           can(context, "workers.read_all")
             ? "When the customer asks to see something specific, call show_snapshot once and do not also call show_records. view worker plus their name shows one person's compliance ring. If several people share the name, a chooser appears; if they then give a worker id, pass workerId. view readiness, open_items, and areas show the dashboard charts. view participant shows a participant's support plan and service agreement. view policy shows an existing policy. view register shows an incident, complaint, or risk; pass a short name or 'latest incident'. After the tool, one sentence. Do not repeat the numbers on the chart. For a list of records, call show_records instead of show_snapshot. After show_records, say what to do first in one or two sentences. Do not repeat every row."
@@ -176,7 +229,8 @@ export async function POST(request: Request) {
           summary: z.string().min(1).max(2000),
         }),
         execute: async ({ rating, summary }) => {
-          if (!isAuditRating(rating) || turn.kind !== "interview") return { proposed: false }
+          if (!isAuditRating(rating) || turn.kind !== "interview")
+            return { proposed: false }
           return { proposed: true, rating, summary }
         },
       })
@@ -219,7 +273,11 @@ export async function POST(request: Request) {
             workerId: z.string().max(80).optional(),
           }),
           execute: async ({ view, name, workerId }) => {
-            if (!claimVisual()) return { shown: false, reason: "This reply already shows one view." }
+            if (!claimVisual())
+              return {
+                shown: false,
+                reason: "This reply already shows one view.",
+              }
             return prepareAssistantSnapshot(context, { view, name, workerId })
           },
         })
@@ -270,7 +328,11 @@ export async function POST(request: Request) {
   const proposeTask =
     taskAllowed.length > 0
       ? tool({
-          description: proposeTaskDescription(taskAllowed, taskTeams, taskStandards),
+          description: proposeTaskDescription(
+            taskAllowed,
+            taskTeams,
+            taskStandards
+          ),
           inputSchema: assistantTaskInputSchema,
           execute: async (input) =>
             prepareAssistantTask(input, {
@@ -282,53 +344,250 @@ export async function POST(request: Request) {
         })
       : null
 
+  const assignTasks =
+    general && can(context, "workers.manage")
+      ? tool({
+          description:
+            "Propose staff tasks. Nothing is saved until the customer presses Assign. kind task is one task: pass title and detail, and do not choose an assignee. kind compliance lists the open items that raise compliance by lift percentage points. Pass lift as the number they asked for.",
+          inputSchema: assignTasksInputSchema,
+          execute: async (input) => {
+            if (!claimVisual())
+              return {
+                proposed: false,
+                reason: "This reply already shows one view.",
+              }
+            try {
+              const people = await listTaskAssignees(context)
+              const directory = { people, youId: context.workerId }
+              if (input.kind === "task")
+                return prepareTaskAssignment(input, directory)
+              if (input.kind === "compliance") {
+                const plan = await loadComplianceLift(context, input.lift ?? 20)
+                if (!plan.ok) return { proposed: false, reason: plan.reason }
+                return prepareComplianceAssignment(plan, directory)
+              }
+              const neverInput: never = input
+              return neverInput
+            } catch (error) {
+              console.error("assign tasks", error)
+              return { proposed: false, reason: "Tasks could not be prepared." }
+            }
+          },
+        })
+      : null
+
+  const flagTurn = general && isPolicyFlagPrompt(lastUserText(incoming))
+  if (general && can(context, "workers.manage") && !flagTurn) {
+    const asked = assignmentRequest(lastUserText(incoming))
+    if (asked) return streamAssignmentReply(context, asked)
+  }
+
   const messages = recentMessages(
     incoming,
     interview || audit ? interviewHistoryLimit : assistantHistoryLimit,
-    interview || audit ? 2000 : 800
+    interview || audit ? 2000 : 800,
+    allowance.kind === "trial" ? trialDataUrlLimit : undefined
   )
   let tools: ToolSet | undefined
   if (assessment) tools = { record_assessment: assessment }
   else if (finding) tools = { record_finding: finding }
-  else if (proposeTask || showSnapshot || showRecords || draftPolicy) {
+  else if (
+    proposeTask ||
+    assignTasks ||
+    showSnapshot ||
+    showRecords ||
+    draftPolicy
+  ) {
     tools = {
       ...(proposeTask ? { propose_task: proposeTask } : {}),
+      ...(assignTasks ? { assign_tasks: assignTasks } : {}),
       ...(showSnapshot ? { show_snapshot: showSnapshot } : {}),
       ...(showRecords ? { show_records: showRecords } : {}),
       ...(draftPolicy ? { draft_policy: draftPolicy } : {}),
     }
   }
-  const replyTokens = draftPolicy
-    ? policyReplyTokens
-    : tools
-      ? interviewReplyTokens
-      : assistantReplyTokens
+  if (flagTurn) tools = undefined
+  const guided = flagTurn
+    ? `${instructions}\nThe customer asked why a flagged policy does not meet its practice standard. Explain the gaps in a few sentences and list the changes. End by asking whether they want you to implement the changes or assign them to someone. Do not call a tool.`
+    : instructions
+  const replyTokens = flagTurn
+    ? interviewReplyTokens
+    : assistantReplyBudget(
+        general ? "general" : interview ? "interview" : "audit",
+        lastUserText(incoming)
+      )
+  let outputTokens = replyTokens
+  if (allowance.kind === "trial" || allowance.kind === "included") {
+    const granted = await claimAssistantTrialTokens(
+      context.organisationId,
+      Math.min(allowance.remaining, replyTokens + 4_000)
+    )
+    if (granted <= 0) {
+      return new Response(
+        assistantAllowanceMessage({
+          kind: "spent",
+          reset: allowance.kind === "trial" ? "trial" : "month",
+          included: allowance.included,
+        }),
+        { status: 402 }
+      )
+    }
+    outputTokens = Math.min(replyTokens, granted)
+  }
   const result = streamText({
     model: assistantModel,
-    maxOutputTokens: replyTokens,
+    temperature: assistantTemperature,
+    maxOutputTokens: outputTokens,
     ...(tools ? { stopWhen: isStepCount(general ? 5 : 4) } : {}),
     tools,
     experimental_transform: smoothStream({ delayInMs: 45, chunking: "word" }),
-    instructions,
+    instructions: guided,
     messages: await convertToModelMessages(messages, {
       tools,
       ignoreIncompleteToolCalls: true,
     }),
-    onFinish: (event) => {
-      if (!meterTrial) return
-      const tokens = (event.usage.inputTokens ?? 0) + (event.usage.outputTokens ?? 0)
-      void recordAssistantTokens(context.organisationId, tokens).catch((error: unknown) => {
-        console.error("assistant usage", error)
-      })
-    },
   })
 
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({
-      stream: result.stream,
+      stream: surfaceEmptyError(result.stream),
       onError: (error) => assistantErrorText(error),
     }),
   })
+}
+
+/** Gemini sometimes ends a tool call with no text and finish reason error. Surface that, or the chat looks like it ignored the question. */
+function surfaceEmptyError<T extends StreamPart>(stream: ReadableStream<T>) {
+  let sawContent = false
+  return stream.pipeThrough(
+    new TransformStream<T, T>({
+      transform(part, controller) {
+        if (isReplyContent(part)) sawContent = true
+        if (
+          !sawContent &&
+          part.type === "finish" &&
+          part.finishReason === "error"
+        ) {
+          controller.enqueue({
+            type: "error",
+            error: new Error("The assistant could not answer. Try again."),
+          } as T)
+        }
+        controller.enqueue(part)
+      },
+    })
+  )
+}
+
+function isReplyContent(part: StreamPart) {
+  if (part.type === "text-delta") return (part.text?.length ?? 0) > 0
+  return (
+    part.type === "tool-call" ||
+    part.type === "tool-input-start" ||
+    part.type === "tool-result" ||
+    part.type === "tool-error"
+  )
+}
+
+type StreamPart = {
+  type: string
+  text?: string
+  finishReason?: string
+  error?: unknown
+}
+
+function lastUserText(messages: UIMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.role !== "user") continue
+    return message.parts
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("")
+      .trim()
+  }
+  return ""
+}
+
+async function streamAssignmentReply(
+  context: TenantContext,
+  asked: AssignmentRequest
+) {
+  const people = await listTaskAssignees(context)
+  const directory = { people, youId: context.workerId }
+  const prepared =
+    asked.kind === "task"
+      ? prepareTaskAssignment(asked, directory)
+      : await compliancePrepared(context, asked, directory)
+  const sentence = prepared.proposed
+    ? prepared.assignment.kind === "task"
+      ? "Choose who this goes to."
+      : "Choose who each of these goes to, or assign them all to one person."
+    : prepared.reason
+  const stream = createUIMessageStream({
+    execute({ writer }) {
+      const textId = "assignment-text"
+      writer.write({ type: "start" })
+      writer.write({ type: "start-step" })
+      writer.write({ type: "text-start", id: textId })
+      writer.write({ type: "text-delta", id: textId, delta: sentence })
+      writer.write({ type: "text-end", id: textId })
+      if (prepared.proposed) {
+        const toolCallId = crypto.randomUUID()
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "assign_tasks",
+          input:
+            asked.kind === "task"
+              ? {
+                  kind: "task",
+                  title: asked.title,
+                  detail: asked.detail || "Choose who this goes to.",
+                }
+              : { kind: "compliance", lift: prepared.assignment.lift ?? 20 },
+        })
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: prepared,
+        })
+      }
+      writer.write({ type: "finish-step" })
+      writer.write({ type: "finish" })
+    },
+  })
+  return createUIMessageStreamResponse({ stream })
+}
+
+async function compliancePrepared(
+  context: TenantContext,
+  asked: Extract<AssignmentRequest, { kind: "compliance" }>,
+  directory: { people: { id: string; name: string }[]; youId: string | null }
+) {
+  switch (asked.mode) {
+    case "lift": {
+      const plan = await loadComplianceLift(context, asked.points)
+      if (!plan.ok) return { proposed: false as const, reason: plan.reason }
+      return prepareComplianceAssignment(plan, directory)
+    }
+    case "target": {
+      const plan = await loadComplianceTarget(context, asked.percent)
+      if (!plan.ok) return { proposed: false as const, reason: plan.reason }
+      return prepareComplianceAssignment(plan, directory)
+    }
+    case "count": {
+      const plan = await loadComplianceCount(context, asked.count)
+      if (!plan.ok) return { proposed: false as const, reason: plan.reason }
+      return prepareComplianceAssignment(plan, directory, {
+        heading: complianceCountHeading(plan.tasks.length),
+        note: complianceCountNote(plan, asked.count),
+      })
+    }
+    default: {
+      const neverMode: never = asked
+      return neverMode
+    }
+  }
 }
 
 function proposeTaskDescription(
@@ -340,14 +599,18 @@ function proposeTaskDescription(
     "Propose one change in the software. Nothing is saved until the customer presses Confirm.",
   ]
   if (allowed.includes("review_documents")) {
-    lines.push("review_documents checks pending worker documents. Pass only kind.")
+    lines.push(
+      "review_documents checks pending worker documents. Pass only kind."
+    )
   }
   if (allowed.includes("add_worker")) {
     const names = teams.map((team) => `${team.name} (${team.code})`).join(", ")
     lines.push(`add_worker adds one worker. team must be one of: ${names}.`)
   }
   if (allowed.includes("file_policy")) {
-    const names = standards.map((standard) => `${standard.code} (${standard.name})`).join("; ")
+    const names = standards
+      .map((standard) => `${standard.code} (${standard.name})`)
+      .join("; ")
     lines.push(
       `file_policy saves one policy draft. standardCode must be one of: ${names}. Include the full policy.`
     )

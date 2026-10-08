@@ -7,6 +7,9 @@ const verbs: Record<string, string> = {
   "document.viewed": "viewed a document",
   "document_roles.updated": "updated credential roles",
   "worker.created": "added a worker",
+  "task.created": "assigned a task",
+  "task.completed": "completed a task",
+  "task.reopened": "reopened a task",
   "worker.updated": "updated a worker",
   "worker.deleted": "deleted a worker",
   "worker.invited": "invited a worker",
@@ -27,6 +30,7 @@ const verbs: Record<string, string> = {
   "organisation.logo_updated": "updated the organisation logo",
   "organisation.logo_removed": "removed the organisation logo",
   "organisation.identity_updated": "updated business details",
+  "organisation.registration_groups_updated": "updated registration groups",
   "billing.updated": "updated billing",
   "team.created": "created a team",
   "team.updated": "updated a team",
@@ -38,6 +42,7 @@ const verbs: Record<string, string> = {
   "policy.draft_removed": "removed a policy draft",
   "policy.viewed": "viewed a policy",
   "policy.moved": "moved a policy into a file",
+  "policy.flagged": "flagged a policy that does not meet the current standard",
   "policy_file.created": "added a policy file",
   "policy_file.renamed": "renamed a policy file",
   "policy_file.removed": "removed a policy file",
@@ -121,6 +126,9 @@ export function auditSentence(
   }
   if (action === "document.flagged") {
     return "had the assistant flag a document for a person to check"
+  }
+  if (action === "task.created" && assistantChecked(metadata)) {
+    return "had the assistant assign a task"
   }
   if (action === "worker.invited" && inviteWasNotEmailed(metadata)) {
     return scope === "worker"

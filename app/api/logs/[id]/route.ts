@@ -23,6 +23,10 @@ export async function GET(
     return NextResponse.json({ error: "Entry not found" }, { status: 404 })
   }
 
+  if (!entry.storage_path || !entry.original_filename || !entry.mime_type) {
+    return NextResponse.json({ error: "File not found" }, { status: 404 })
+  }
+
   const supabase = await createServerSupabase()
   const { data, error } = await supabase.storage
     .from("logs")

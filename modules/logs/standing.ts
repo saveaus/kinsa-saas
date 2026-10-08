@@ -166,18 +166,71 @@ export function logPlaceLabel(log: {
   subject: LogSubject
   personName: string | null
 }) {
-  if (log.scope === "person") return log.personName ?? "One person"
+  if (log.scope === "person") return log.personName ?? "One record"
   switch (log.subject) {
     case "organisation":
-      return "Sidebar"
+      return "Logs"
     case "participant":
-      return "Sidebar, and on every participant"
+      return "Logs and participant profiles"
     case "worker":
-      return "Sidebar, and on every worker"
+      return "Logs and worker profiles"
     default: {
       const unreachable: never = log.subject
       return unreachable
     }
+  }
+}
+
+export function logFileHref(id: string) {
+  return `/logs/files/${id}`
+}
+
+const personKey = /^(participant|worker):([0-9a-f-]{36})$/i
+
+export function logRegisterRoute(home: string, person: string) {
+  switch (home) {
+    case "logs":
+      return {
+        scope: "global" as const,
+        subject: "organisation" as const,
+        participant_id: null,
+        worker_id: null,
+      }
+    case "participants":
+      return {
+        scope: "global" as const,
+        subject: "participant" as const,
+        participant_id: null,
+        worker_id: null,
+      }
+    case "workers":
+      return {
+        scope: "global" as const,
+        subject: "worker" as const,
+        participant_id: null,
+        worker_id: null,
+      }
+    case "record": {
+      const match = personKey.exec(person.trim())
+      if (!match) return null
+      const id = match[2]
+      if (match[1].toLowerCase() === "participant") {
+        return {
+          scope: "person" as const,
+          subject: "participant" as const,
+          participant_id: id,
+          worker_id: null,
+        }
+      }
+      return {
+        scope: "person" as const,
+        subject: "worker" as const,
+        participant_id: null,
+        worker_id: id,
+      }
+    }
+    default:
+      return null
   }
 }
 
@@ -200,7 +253,7 @@ export function logOnPerson(
   },
   person: { participantId?: string; workerId?: string }
 ) {
-  if (!log.visible || log.built_in) return false
+  if (log.built_in) return false
   if (person.participantId && log.subject === "participant") {
     return log.scope === "global" || log.participant_id === person.participantId
   }

@@ -204,7 +204,11 @@ export function BillingSettings({
           <div className="flex items-center justify-between gap-3 text-sm">
             <p className="font-medium">Assistant</p>
             <p className="text-muted-foreground">
-              {assistantMeter.percent === null ? "Included with the plan" : `${assistantMeter.percent}%`}
+              {assistantMeter.percent === null
+                ? "Included with the plan"
+                : assistantMeter.period === "month"
+                  ? `${assistantMeter.percent}% of this month`
+                  : `${assistantMeter.percent}% of the trial`}
             </p>
           </div>
           {assistantMeter.percent !== null ? (

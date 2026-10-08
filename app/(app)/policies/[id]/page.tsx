@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 
 import { ActionForm } from "@/components/action-form"
 import { BackLink } from "@/components/back-link"
+import { PolicyFlagLink } from "@/components/policy-flag"
 import { PolicyPdf } from "@/components/policy-pdf"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
@@ -61,6 +62,14 @@ export default async function PolicyPage({
           {formatDate(policy.review_on)}
         </p>
       </div>
+      {policy.compliance_flagged ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-sm">
+            This policy does not meet the current standard.
+          </p>
+          <PolicyFlagLink id={policy.id} labeled />
+        </div>
+      ) : null}
       {policy.status === "draft" ? (
         <p className="text-sm text-muted-foreground">
           This draft does not count until someone accepts it. After that, it

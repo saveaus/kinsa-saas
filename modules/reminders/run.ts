@@ -133,7 +133,72 @@ export async function runReminderSweep() {
     }
   }
 
+  sent += await notifyDueLogs(supabase, todayOn)
   return { sent, skipped }
+}
+
+async function notifyDueLogs(
+  supabase: ReturnType<typeof createAdminSupabase>,
+  todayOn: string
+) {
+  const { data: entries, error } = await supabase
+    .from("log_entries")
+    .select("id, organisation_id, summary, due_on, register_id")
+    .eq("remind", true)
+    .is("reminded_at", null)
+    .lte("due_on", todayOn)
+    .eq("status", "accepted")
+  if (error) throw new Error(error.message)
+  const rows = entries ?? []
+  if (rows.length === 0) return 0
+
+  const orgIds = [...new Set(rows.map((row) => row.organisation_id))]
+  const { data: members, error: memberError } = await supabase
+    .from("memberships")
+    .select("organisation_id, user_id")
+    .eq("role", "admin")
+    .in("organisation_id", orgIds)
+  if (memberError) throw new Error(memberError.message)
+
+  const userIds = [...new Set((members ?? []).map((member) => member.user_id))]
+  const emails = new Map<string, string>()
+  if (userIds.length > 0) {
+    const { data: users, error: userError } = await supabase
+      .from("users")
+      .select("id, email")
+      .in("id", userIds)
+    if (userError) throw new Error(userError.message)
+    for (const user of users ?? []) emails.set(user.id, user.email)
+  }
+
+  let sent = 0
+  for (const entry of rows) {
+    const recipients = (members ?? []).flatMap((member) => {
+      if (member.organisation_id !== entry.organisation_id) return []
+      const email = emails.get(member.user_id)
+      return email ? [email] : []
+    })
+    const dueLabel = entry.due_on
+      ? format(parseISO(entry.due_on), "d MMM yyyy")
+      : "today"
+    let delivered = recipients.length === 0
+    for (const to of recipients) {
+      const result = await sendReminderEmail({
+        to,
+        subject: `Due: ${entry.summary}`,
+        body: `${entry.summary} is due ${dueLabel}.\n\nOpen it: ${appUrl()}/logs/files/${entry.register_id}\n`,
+      })
+      if (result.sent) delivered = true
+    }
+    if (!delivered) continue
+    const { error: updateError } = await supabase
+      .from("log_entries")
+      .update({ reminded_at: new Date().toISOString() })
+      .eq("id", entry.id)
+    if (updateError) throw new Error(updateError.message)
+    if (recipients.length > 0) sent += 1
+  }
+  return sent
 }
 
 async function sendFollowUp(input: {

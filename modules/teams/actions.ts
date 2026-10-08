@@ -1,7 +1,6 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 
 import type { AppPermission } from "@/lib/database.types"
 import { ALL_PERMISSIONS } from "@/lib/permissions"
@@ -21,10 +20,11 @@ const defaultPermissions: AppPermission[] = [
 ]
 
 function refreshTeamSurfaces() {
-  revalidatePath("/settings/roles")
+  revalidatePath("/settings/teams")
+  revalidatePath("/settings/permissions")
   revalidatePath("/settings/credentials")
   revalidatePath("/settings/courses")
-  revalidatePath("/workers")
+  revalidatePath("/workers", "layout")
 }
 
 export async function createTeamAction(
@@ -83,7 +83,7 @@ export async function createTeamAction(
 
   await recordAudit("team.created", "team", data.id, { name, permissions })
   refreshTeamSurfaces()
-  redirect(`/settings/roles?team=${code}`)
+  return { message: "Team created." }
 }
 
 export async function updateTeamAction(
@@ -109,6 +109,30 @@ export async function updateTeamAction(
   ) {
     return { error: "A team with that name already exists." }
   }
+
+  const supabase = await createServerSupabase()
+  const { error } = await supabase
+    .from("teams")
+    .update({ name })
+    .eq("id", team.id)
+    .eq("organisation_id", context.organisationId)
+  if (error) return { error: error.message }
+
+  await recordAudit("team.updated", "team", team.id, { name })
+  refreshTeamSurfaces()
+  return { message: "Team saved." }
+}
+
+export async function updateTeamPermissionsAction(
+  teamId: string,
+  _prev: TeamActionState,
+  formData: FormData
+): Promise<TeamActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const teams = await listTeams(context)
+  const team = teams.find((item) => item.id === teamId)
+  if (!team) return { error: "Team not found." }
 
   const requested = new Set(parseTeamPermissions(formData))
   const actor = new Set(context.permissions)
@@ -141,34 +165,38 @@ export async function updateTeamAction(
   }
 
   const supabase = await createServerSupabase()
-  const { error: nameError } = await supabase
-    .from("teams")
-    .update({ name })
-    .eq("id", team.id)
-    .eq("organisation_id", context.organisationId)
-  if (nameError) return { error: nameError.message }
+  const remove = team.permissions.filter(
+    (permission) => actor.has(permission) && !permissions.includes(permission)
+  )
+  const add = permissions.filter(
+    (permission) => !team.permissions.includes(permission)
+  )
 
-  const { error: deleteError } = await supabase
-    .from("team_permissions")
-    .delete()
-    .eq("team_id", team.id)
-  if (deleteError) return { error: deleteError.message }
-
-  if (permissions.length > 0) {
-    const { error: insertError } = await supabase
+  if (remove.length > 0) {
+    const { error: deleteError } = await supabase
       .from("team_permissions")
-      .insert(
-        permissions.map((permission) => ({
-          team_id: team.id,
-          permission,
-        }))
-      )
+      .delete()
+      .eq("team_id", team.id)
+      .in("permission", remove)
+    if (deleteError) return { error: deleteError.message }
+  }
+
+  if (add.length > 0) {
+    const { error: insertError } = await supabase.from("team_permissions").insert(
+      add.map((permission) => ({
+        team_id: team.id,
+        permission,
+      }))
+    )
     if (insertError) return { error: insertError.message }
   }
 
-  await recordAudit("team.updated", "team", team.id, { name, permissions })
+  await recordAudit("team.updated", "team", team.id, {
+    name: team.name,
+    permissions,
+  })
   refreshTeamSurfaces()
-  return { message: "Team saved." }
+  return { message: "Permissions saved." }
 }
 
 export async function deleteTeamAction(
@@ -181,9 +209,6 @@ export async function deleteTeamAction(
   const teams = await listTeams(context)
   const team = teams.find((item) => item.id === teamId)
   if (!team) return { error: "Team not found." }
-  if (team.builtIn) {
-    return { error: "Standard teams can be renamed. They stay in the list." }
-  }
 
   const supabase = await createServerSupabase()
   const { data: used, error: usedError } = await supabase
@@ -198,20 +223,6 @@ export async function deleteTeamAction(
     return { error: "Move people off this team before deleting it." }
   }
 
-  const { error: documentError } = await supabase
-    .from("document_role_requirements")
-    .delete()
-    .eq("organisation_id", context.organisationId)
-    .eq("staff_role", team.code)
-  if (documentError) return { error: documentError.message }
-
-  const { error: courseError } = await supabase
-    .from("course_role_requirements")
-    .delete()
-    .eq("organisation_id", context.organisationId)
-    .eq("staff_role", team.code)
-  if (courseError) return { error: courseError.message }
-
   const { error } = await supabase
     .from("teams")
     .delete()
@@ -219,7 +230,20 @@ export async function deleteTeamAction(
     .eq("organisation_id", context.organisationId)
   if (error) return { error: error.message }
 
+  const { error: documentError } = await supabase
+    .from("document_role_requirements")
+    .delete()
+    .eq("organisation_id", context.organisationId)
+    .eq("staff_role", team.code)
+  const { error: courseError } = await supabase
+    .from("course_role_requirements")
+    .delete()
+    .eq("organisation_id", context.organisationId)
+    .eq("staff_role", team.code)
+
   await recordAudit("team.deleted", "team", team.id, { name: team.name })
   refreshTeamSurfaces()
-  redirect("/settings/roles")
+  if (documentError) return { error: documentError.message }
+  if (courseError) return { error: courseError.message }
+  return { message: "Team deleted." }
 }

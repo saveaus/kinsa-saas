@@ -6,7 +6,7 @@ export async function listPolicies(context: TenantContext) {
   const { data, error } = await supabase
     .from("policies")
     .select(
-      "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename, template_key, category, file_id"
+      "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename, template_key, category, file_id, compliance_flagged"
     )
     .eq("organisation_id", context.organisationId)
     .order("name", { ascending: true })
@@ -20,7 +20,7 @@ export async function getPolicy(context: TenantContext, policyId: string) {
   const { data, error } = await supabase
     .from("policies")
     .select(
-      "id, name, standard_code, review_on, status, body, mime_type, original_filename, storage_path, category, file_id"
+      "id, name, standard_code, review_on, status, body, mime_type, original_filename, storage_path, category, file_id, compliance_flagged, compliance_note"
     )
     .eq("id", policyId)
     .eq("organisation_id", context.organisationId)

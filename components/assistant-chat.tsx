@@ -20,7 +20,12 @@ import {
 import { AssistantPolicyCard } from "@/components/assistant-policy"
 import { AssistantRatingCard } from "@/components/assistant-rating"
 import { AssistantRecordsCard } from "@/components/assistant-records"
-import { AssistantSnapshotCard, AssistantSnapshotSkeleton } from "@/components/assistant-snapshot"
+import {
+  AssistantSnapshotCard,
+  AssistantSnapshotSkeleton,
+} from "@/components/assistant-snapshot"
+import { AssistantAssignCard } from "@/components/assistant-assign"
+import { PolicyComplianceChoice } from "@/components/policy-compliance-choice"
 import { AssistantTaskCard } from "@/components/assistant-task"
 import { AuditChoice } from "@/components/audit-choice"
 import { RotatingSuggestions } from "@/components/rotating-suggestions"
@@ -29,18 +34,32 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
   acceptAttachments,
+  attachmentByteLimit,
   attachmentCountLimit,
   isPastedTextName,
   pasteAsAttachment,
   pastedTextName,
 } from "@/modules/assistant/attachments"
 import { confirmInterviewRating } from "@/modules/internal-audits/actions"
-import { auditSelectionPrefix, findingsFromParts, proposedFindingsFromParts } from "@/modules/internal-audits/conduct"
+import {
+  auditSelectionPrefix,
+  findingsFromParts,
+  proposedFindingsFromParts,
+} from "@/modules/internal-audits/conduct"
+import type { AssistantUpgrade } from "@/modules/assistant/allowance"
 import { policyDraftsFromParts } from "@/modules/assistant/policy"
+import { messageText, policyFlagId } from "@/modules/policies/flag-prompt"
 import { ratingsFromParts } from "@/modules/assistant/ratings"
 import { recordCardsFromParts } from "@/modules/assistant/records"
-import { snapshotPending, snapshotsFromParts } from "@/modules/assistant/snapshots"
+import {
+  snapshotPending,
+  snapshotsFromParts,
+} from "@/modules/assistant/snapshots"
 import { confirmAssistantTask } from "@/modules/assistant/task-actions"
+import {
+  assignmentsFromParts,
+  type AssignmentOutcome,
+} from "@/modules/assistant/assignments"
 import {
   tasksFromParts,
   type AssistantStoredTask,
@@ -56,7 +75,11 @@ import {
   previewCertificatesAction,
   previewStaffAction,
 } from "@/modules/migration/actions"
-import { certificateCheckMessage, staffCheckMessage, teamLabel } from "@/modules/migration/speak"
+import {
+  certificateCheckMessage,
+  staffCheckMessage,
+  teamLabel,
+} from "@/modules/migration/speak"
 import {
   clearAssistantDraft,
   readAssistantDraft,
@@ -105,6 +128,10 @@ export function AssistantChat({
   canImport = false,
   suggestions = [],
   auditChoices = [],
+  starter,
+  policyFlag = null,
+  canAssign = false,
+  upgrade = null,
 }: {
   chat?: {
     id: string
@@ -118,9 +145,20 @@ export function AssistantChat({
   canImport?: boolean
   suggestions?: string[]
   auditChoices?: { code: string; label: string }[]
+  starter?: string
+  policyFlag?: {
+    id: string
+    stamp: string
+    filename: string
+    prompt: string
+  } | null
+  canAssign?: boolean
+  upgrade?: AssistantUpgrade | null
 }) {
   const interview = Boolean(chat?.interviewAuditId)
-  const audit = !interview && (mode === "internal_audit" || chat?.purpose === "internal_audit")
+  const audit =
+    !interview &&
+    (mode === "internal_audit" || chat?.purpose === "internal_audit")
   const prompts = interview
     ? interviewSuggestions
     : audit
@@ -130,14 +168,18 @@ export function AssistantChat({
       : suggestions
   const router = useRouter()
   const pathname = usePathname()
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState(starter ?? "")
   const [notice, setNotice] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [pending, setPending] = useState<PendingImport | null>(null)
   const [attachments, setAttachments] = useState<ComposerFile[]>([])
-  const [outcomes, setOutcomes] = useState<Record<string, AssistantTaskOutcome>>({})
+  const [outcomes, setOutcomes] = useState<
+    Record<string, AssistantTaskOutcome>
+  >({})
+  const [assignmentOutcomes, setAssignmentOutcomes] = useState<
+    Record<string, AssignmentOutcome>
+  >({})
   const [findingOutcomes, setFindingOutcomes] = useState<
     Record<string, { status: "confirmed" | "cancelled"; result: string }>
   >({})
@@ -146,12 +188,14 @@ export function AssistantChat({
   >({})
   const imports = canImport && !interview && !audit
   const outcomesRef = useRef(outcomes)
+  const assignmentRef = useRef(assignmentOutcomes)
   const findingRef = useRef(findingOutcomes)
   const ratingRef = useRef(ratingOutcomes)
   const previousRef = useRef<AssistantStoredMessage[]>(chat?.messages ?? [])
   const messagesRef = useRef<UIMessage[]>([])
   const attachmentsRef = useRef(attachments)
   outcomesRef.current = outcomes
+  assignmentRef.current = assignmentOutcomes
   findingRef.current = findingOutcomes
   ratingRef.current = ratingOutcomes
   attachmentsRef.current = attachments
@@ -176,56 +220,85 @@ export function AssistantChat({
   hasChat.current = Boolean(chat)
   const persistRef = useRef<(next: UIMessage[]) => void>(() => undefined)
   persistRef.current = (next) => {
-    const stored = toStoredMessages(next, previousRef.current, outcomesRef.current, {
-      findings: findingRef.current,
-      ratings: ratingRef.current,
-    })
+    const stored = toStoredMessages(
+      next,
+      previousRef.current,
+      outcomesRef.current,
+      {
+        findings: findingRef.current,
+        ratings: ratingRef.current,
+        assignments: assignmentRef.current,
+      }
+    )
     previousRef.current = stored
-    persistChain.current = persistChain.current.catch(() => undefined).then(async () => {
-      const existingId = savedId.current
-      if (existingId) {
-        const result = await updateAssistantChatMessages(existingId, stored)
+    persistChain.current = persistChain.current
+      .catch(() => undefined)
+      .then(async () => {
+        const existingId = savedId.current
+        if (existingId) {
+          const result = await updateAssistantChatMessages(existingId, stored)
+          if (result.error || !result.id) {
+            persistFailed.current = true
+            setNotice(result.error ?? "The chat could not be saved.")
+            return
+          }
+          persistFailed.current = false
+          if (hasChat.current) router.refresh()
+          return
+        }
+        const result = await saveAssistantChat(
+          stored,
+          auditRef.current ? { purpose: "internal_audit" } : undefined
+        )
         if (result.error || !result.id) {
           persistFailed.current = true
           setNotice(result.error ?? "The chat could not be saved.")
           return
         }
+        savedId.current = result.id
         persistFailed.current = false
-        if (hasChat.current) router.refresh()
-        return
-      }
-      const result = await saveAssistantChat(
-        stored,
-        auditRef.current ? { purpose: "internal_audit" } : undefined
-      )
-      if (result.error || !result.id) {
-        persistFailed.current = true
-        setNotice(result.error ?? "The chat could not be saved.")
-        return
-      }
-      savedId.current = result.id
-      persistFailed.current = false
-      if (!auditRef.current) router.replace(`/assistant/${result.id}`)
-    })
+        if (!auditRef.current) router.replace(`/assistant/${result.id}`)
+      })
   }
   useEffect(() => {
     return () => releaseAttachments(attachmentsRef.current)
   }, [])
 
-  const { messages, sendMessage, status, stop, error, regenerate, clearError } = useChat({
-    id: chat?.id,
-    messages: chat ? toUIMessages(chat.messages) : undefined,
-    transport,
-    onFinish: ({ messages: next, isAbort, isError }) => {
-      if (isAbort || isError) return
-      persistRef.current(next)
-    },
-  })
+  const { messages, sendMessage, status, stop, error, regenerate, clearError } =
+    useChat({
+      id: chat?.id,
+      messages: chat ? toUIMessages(chat.messages) : undefined,
+      transport,
+      onFinish: ({ messages: next, isAbort, isError, finishReason }) => {
+        if (isAbort || isError || finishReason === "error") return
+        persistRef.current(next)
+      },
+    })
 
   const startedDraft = useRef<string | null>(null)
 
   useEffect(() => {
-    if (chat || pathname !== "/assistant") {
+    if (!starter || messages.length > 0) return
+    setInput(starter)
+  }, [starter, messages.length])
+
+  useEffect(() => {
+    if (upgrade || !policyFlag || chat || messages.length > 0) return
+    let cancel = false
+    void (async () => {
+      const file = await loadPolicyFile(policyFlag)
+      if (cancel) return
+      if (file)
+        void sendMessage({ text: policyFlag.prompt, files: toFileList([file]) })
+      else void sendMessage({ text: policyFlag.prompt })
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [chat, messages.length, policyFlag, sendMessage, upgrade])
+
+  useEffect(() => {
+    if (upgrade || chat || starter || pathname !== "/assistant") {
       startedDraft.current = null
       return
     }
@@ -233,7 +306,7 @@ export function AssistantChat({
     if (!draft || startedDraft.current === draft || messages.length > 0) return
     startedDraft.current = draft
     void sendMessage({ text: draft })
-  }, [chat, messages.length, pathname, sendMessage])
+  }, [chat, messages.length, pathname, sendMessage, starter, upgrade])
 
   useEffect(() => {
     const draft = readAssistantDraft()
@@ -241,7 +314,9 @@ export function AssistantChat({
     const sent = messages.some(
       (message) =>
         message.role === "user" &&
-        message.parts.some((part) => part.type === "text" && part.text.trim() === draft)
+        message.parts.some(
+          (part) => part.type === "text" && part.text.trim() === draft
+        )
     )
     if (!sent) return
     const handle = window.setTimeout(() => clearAssistantDraft(), 0)
@@ -256,7 +331,11 @@ export function AssistantChat({
   const showThinking =
     busy &&
     !liveHasText &&
-    !(liveReply && (snapshotPending(liveReply.parts) || snapshotsFromParts(liveReply.parts).length > 0))
+    !(
+      liveReply &&
+      (snapshotPending(liveReply.parts) ||
+        snapshotsFromParts(liveReply.parts).length > 0)
+    )
 
   useEffect(() => {
     if (chat || !audit || busy) return
@@ -275,16 +354,19 @@ export function AssistantChat({
   const started = messages.length > 0
 
   function startAudit(selected: { code: string; label: string }[]) {
-    if (selected.length === 0 || busy) return
+    if (selected.length === 0 || busy || upgrade) return
     setNotice(null)
     void sendMessage({
-      text: [auditSelectionPrefix, ...selected.map((group) => group.label)].join("\n"),
+      text: [
+        auditSelectionPrefix,
+        ...selected.map((group) => group.label),
+      ].join("\n"),
     })
   }
 
   function ask(text: string) {
     const trimmed = text.trim()
-    if (!trimmed || busy) return
+    if (!trimmed || busy || upgrade) return
     setInput("")
     setNotice(null)
     void sendMessage({ text: trimmed })
@@ -293,7 +375,7 @@ export function AssistantChat({
   function submit(text: string) {
     const trimmed = text.trim()
     const staged = attachments
-    if (busy) return
+    if (busy || upgrade) return
     if (!trimmed && staged.length === 0) return
     setInput("")
     setNotice(null)
@@ -302,7 +384,9 @@ export function AssistantChat({
     const files = staged.map((item) => item.file)
     const list = files.length > 0 ? toFileList(files) : null
     if (list && list.length > 0) {
-      void sendMessage(trimmed ? { text: trimmed, files: list } : { files: list })
+      void sendMessage(
+        trimmed ? { text: trimmed, files: list } : { files: list }
+      )
     } else if (trimmed) {
       void sendMessage({ text: trimmed })
     }
@@ -324,7 +408,9 @@ export function AssistantChat({
         {
           id: crypto.randomUUID(),
           file,
-          previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+          previewUrl: file.type.startsWith("image/")
+            ? URL.createObjectURL(file)
+            : null,
         },
       ]
     })
@@ -377,7 +463,9 @@ export function AssistantChat({
   }
 
   async function openCertificates(files: File[], announce = true) {
-    const preview = await previewCertificatesAction(files.map((file) => file.name))
+    const preview = await previewCertificatesAction(
+      files.map((file) => file.name)
+    )
     setPending({
       kind: "certificates",
       workers: preview.workers,
@@ -410,10 +498,15 @@ export function AssistantChat({
     }
     try {
       const spreadsheets = list.filter((file) => /\.xlsx?$/i.test(file.name))
-      const rosters = list.filter((file) => /\.(csv|tsv)$/i.test(file.name) && !file.name.startsWith("."))
-      const notes = list.filter((file) => /\.txt$/i.test(file.name) && !file.name.startsWith("."))
+      const rosters = list.filter(
+        (file) => /\.(csv|tsv)$/i.test(file.name) && !file.name.startsWith(".")
+      )
+      const notes = list.filter(
+        (file) => /\.txt$/i.test(file.name) && !file.name.startsWith(".")
+      )
       const tooBig = list.filter(
-        (file) => /\.(pdf|png|jpe?g)$/i.test(file.name) && file.size > 10 * 1024 * 1024
+        (file) =>
+          /\.(pdf|png|jpe?g)$/i.test(file.name) && file.size > 10 * 1024 * 1024
       )
       const evidence = list
         .filter(
@@ -429,16 +522,22 @@ export function AssistantChat({
           ? tooBig.length === 1
             ? `${tooBig[0]?.name ?? "A file"} is over 10 MB.`
             : `${tooBig.length} files are over 10 MB.`
-          : spreadsheets.length > 0 && rosters.length === 0 && notes.length === 0
+          : spreadsheets.length > 0 &&
+              rosters.length === 0 &&
+              notes.length === 0
             ? "Save the spreadsheet as CSV and drop it again."
             : null
       const rosterFiles = rosters.length > 0 ? rosters : notes
       if (rosterFiles.length > 0) {
-        const csv = (await Promise.all(rosterFiles.map((file) => file.text()))).join("\n")
+        const csv = (
+          await Promise.all(rosterFiles.map((file) => file.text()))
+        ).join("\n")
         const preview = await previewStaffAction(csv)
         if (!("people" in preview)) {
           if (evidence.length === 0 || rosters.length > 0) {
-            setNotice(preview.error ?? warning ?? "That file could not be read.")
+            setNotice(
+              preview.error ?? warning ?? "That file could not be read."
+            )
             return
           }
         } else {
@@ -493,9 +592,14 @@ export function AssistantChat({
         }
         const held = pending.heldCertificates
         setPending(null)
-        const added = result.added.length === 1 ? "1 worker added." : `${result.added.length} workers added.`
-        const here = result.alreadyHere > 0 ? ` ${result.alreadyHere} already here.` : ""
-        const missed = result.failed > 0 ? ` ${result.failed} could not be added.` : ""
+        const added =
+          result.added.length === 1
+            ? "1 worker added."
+            : `${result.added.length} workers added.`
+        const here =
+          result.alreadyHere > 0 ? ` ${result.alreadyHere} already here.` : ""
+        const missed =
+          result.failed > 0 ? ` ${result.failed} could not be added.` : ""
         setDone(`${added}${here}${missed}`)
         if (held.length > 0) {
           await openCertificates(held)
@@ -520,7 +624,10 @@ export function AssistantChat({
           if (result.error && result.documentsFiled === 0) {
             setPending({ ...pending, files: remaining })
             if (filed > 0) {
-              const count = filed === 1 ? "1 certificate filed." : `${filed} certificates filed.`
+              const count =
+                filed === 1
+                  ? "1 certificate filed."
+                  : `${filed} certificates filed.`
               setDone(`${count} The rest are still in the list.`)
             }
             setNotice(result.error)
@@ -534,15 +641,20 @@ export function AssistantChat({
         console.error(error)
         setPending({ ...pending, files: remaining })
         if (filed > 0) {
-          const count = filed === 1 ? "1 certificate filed." : `${filed} certificates filed.`
+          const count =
+            filed === 1
+              ? "1 certificate filed."
+              : `${filed} certificates filed.`
           setDone(`${count} The rest are still in the list.`)
         }
         setNotice("Those records could not be added.")
         return
       }
       setPending(null)
-      const count = filed === 1 ? "1 certificate filed." : `${filed} certificates filed.`
-      const missed = failed.length > 0 ? ` ${failed.length} could not be saved.` : ""
+      const count =
+        filed === 1 ? "1 certificate filed." : `${filed} certificates filed.`
+      const missed =
+        failed.length > 0 ? ` ${failed.length} could not be saved.` : ""
       setDone(`${count}${missed} The assistant checks the ones it can read.`)
       ask("The certificates are filed.")
     } catch (error) {
@@ -553,113 +665,107 @@ export function AssistantChat({
     }
   }
 
-  const importCard = pending || done ? (
-    <>
-      {done ? <p className="mb-3 text-sm text-muted-foreground">{done}</p> : null}
-      {pending ? (
-    <AssistantImport
-      staff={pending.kind === "staff" ? { people: pending.people, skipped: pending.skipped } : null}
-      certificates={pending.kind === "certificates" ? pending.files : null}
-      teams={pending.kind === "staff" ? pending.teams : []}
-      workers={pending.kind === "certificates" ? pending.workers : []}
-      types={pending.kind === "certificates" ? pending.types : []}
-      busy={importing}
-      onStaffRole={(index, role) =>
-        setPending((current) => {
-          if (!current || current.kind !== "staff") return current
-          return {
-            ...current,
-            people: current.people.map((person, personIndex) =>
-              personIndex === index ? { ...person, roles: [role] } : person
-            ),
-          }
-        })
-      }
-      onCertificate={(index, patch) =>
-        setPending((current) => {
-          if (!current || current.kind !== "certificates") return current
-          return {
-            ...current,
-            files: current.files.map((item, itemIndex) =>
-              itemIndex === index ? { ...item, ...patch } : item
-            ),
-          }
-        })
-      }
-      onApprove={() => void approveImport()}
-      onDismiss={() => setPending(null)}
-    />
-      ) : null}
-    </>
-  ) : null
-
-  async function save() {
-    setSaving(true)
-    const result = await saveAssistantChat(
-      toStoredMessages(messages, previousRef.current, outcomesRef.current, {
-        findings: findingRef.current,
-        ratings: ratingRef.current,
-      })
-    )
-    setSaving(false)
-    if (result.error || !result.id) {
-      setNotice(result.error ?? "The chat could not be saved.")
-      return
-    }
-    router.push(`/assistant/${result.id}`)
-    router.refresh()
-  }
+  const importCard =
+    pending || done ? (
+      <>
+        {done ? (
+          <p className="mb-3 text-sm text-muted-foreground">{done}</p>
+        ) : null}
+        {pending ? (
+          <AssistantImport
+            staff={
+              pending.kind === "staff"
+                ? { people: pending.people, skipped: pending.skipped }
+                : null
+            }
+            certificates={
+              pending.kind === "certificates" ? pending.files : null
+            }
+            teams={pending.kind === "staff" ? pending.teams : []}
+            workers={pending.kind === "certificates" ? pending.workers : []}
+            types={pending.kind === "certificates" ? pending.types : []}
+            busy={importing}
+            onStaffRole={(index, role) =>
+              setPending((current) => {
+                if (!current || current.kind !== "staff") return current
+                return {
+                  ...current,
+                  people: current.people.map((person, personIndex) =>
+                    personIndex === index
+                      ? { ...person, roles: [role] }
+                      : person
+                  ),
+                }
+              })
+            }
+            onCertificate={(index, patch) =>
+              setPending((current) => {
+                if (!current || current.kind !== "certificates") return current
+                return {
+                  ...current,
+                  files: current.files.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, ...patch } : item
+                  ),
+                }
+              })
+            }
+            onApprove={() => void approveImport()}
+            onDismiss={() => setPending(null)}
+          />
+        ) : null}
+      </>
+    ) : null
 
   return (
-    <div data-assistant="" className="flex min-h-0 flex-1 flex-col bg-background">
-      {started && !(audit && !chat) ? (
+    <div
+      data-assistant=""
+      className="flex min-h-0 flex-1 flex-col bg-background"
+    >
+      {started && chat ? (
         <div className="flex h-12 shrink-0 items-center gap-2 px-4">
-          {chat ? (
-            <div className="flex min-w-0 items-center gap-3">
-              <p className="max-w-sm truncate text-sm font-medium">{chat.title}</p>
-              {chat.interviewAuditId ? (
-                <Link
-                  href={`/audits/${chat.interviewAuditId}`}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Internal audit
-                </Link>
-              ) : audit ? (
-                <Link
-                  href="/audits"
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Internal audits
-                </Link>
-              ) : null}
-            </div>
-          ) : audit ? null : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-              disabled={saving || busy}
-              onClick={() => void save()}
-            >
-              Save
-            </Button>
-          )}
+          <div className="flex min-w-0 items-center gap-3">
+            <p className="max-w-sm truncate text-sm font-medium">
+              {chat.title}
+            </p>
+            {chat.interviewAuditId ? (
+              <Link
+                href={`/audits/${chat.interviewAuditId}`}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Internal audit
+              </Link>
+            ) : audit ? (
+              <Link
+                href="/audits"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Internal audits
+              </Link>
+            ) : null}
+          </div>
         </div>
       ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {started ? (
           <ul className="mx-auto grid w-full max-w-3xl gap-6 px-4 py-6">
             {messages.map((message, index) => {
-              const live = busy && index === messages.length - 1 && message.role === "assistant"
-              const hasText = message.parts.some((part) => part.type === "text" && part.text.length > 0)
+              const live =
+                busy &&
+                index === messages.length - 1 &&
+                message.role === "assistant"
+              const hasText = message.parts.some(
+                (part) => part.type === "text" && part.text.length > 0
+              )
               const cardReady =
                 snapshotsFromParts(message.parts).length > 0 ||
                 snapshotPending(message.parts) ||
+                assignmentsFromParts(message.parts).length > 0 ||
                 proposedFindingsFromParts(message.parts).length > 0 ||
                 ratingsFromParts(message.parts).length > 0
               if (live && !hasText && !cardReady) return null
-              const stored = chat?.messages.find((item) => item.id === message.id) || previousRef.current.find((item) => item.id === message.id)
+              const stored =
+                chat?.messages.find((item) => item.id === message.id) ||
+                previousRef.current.find((item) => item.id === message.id)
               const findings =
                 message.role === "assistant"
                   ? findingsFromParts(message.parts).length > 0
@@ -690,19 +796,41 @@ export function AssistantChat({
                     ? tasksFromParts(message.parts)
                     : (stored?.tasks ?? [])
                   : []
+              const assignments =
+                message.role === "assistant"
+                  ? (assignmentsFromParts(message.parts).length > 0
+                      ? assignmentsFromParts(message.parts)
+                      : (stored?.assignments ?? [])
+                    ).map((item) => {
+                      const outcome = assignmentOutcomes[item.id]
+                      return outcome
+                        ? {
+                            ...item,
+                            status: outcome.status,
+                            result: outcome.result,
+                          }
+                        : item
+                    })
+                  : []
               const proposals =
                 message.role === "assistant"
                   ? (proposedFindingsFromParts(message.parts).length > 0
-                      ? proposedFindingsFromParts(message.parts).map((item) => ({
-                          ...item,
-                          status: "pending" as const,
-                          result: undefined as string | undefined,
-                        }))
+                      ? proposedFindingsFromParts(message.parts).map(
+                          (item) => ({
+                            ...item,
+                            status: "pending" as const,
+                            result: undefined as string | undefined,
+                          })
+                        )
                       : (stored?.proposedFindings ?? [])
                     ).map((item) => {
                       const outcome = findingOutcomes[item.id]
                       return outcome
-                        ? { ...item, status: outcome.status, result: outcome.result }
+                        ? {
+                            ...item,
+                            status: outcome.status,
+                            result: outcome.result,
+                          }
                         : item
                     })
                   : []
@@ -718,17 +846,28 @@ export function AssistantChat({
                     ).map((item) => {
                       const outcome = ratingOutcomes[item.id]
                       return outcome
-                        ? { ...item, status: outcome.status, result: outcome.result }
+                        ? {
+                            ...item,
+                            status: outcome.status,
+                            result: outcome.result,
+                          }
                         : item
                     })
                   : []
-              const showSkeleton = snapshotPending(message.parts) && snapshots.length === 0
-              const chips = message.role === "user" ? messageChips(message, stored) : []
+              const showSkeleton =
+                snapshotPending(message.parts) && snapshots.length === 0
+              const chips =
+                message.role === "user" ? messageChips(message, stored) : []
               const caption = chips.map((chip) => chip.name).join(", ")
-              const text = message.parts
-                .flatMap((part) => (part.type === "text" ? [part.text] : []))
-                .join("")
-                .trim()
+              const text = messageText(message.parts)
+              const previous = messages[index - 1]
+              const flaggedId =
+                message.role === "assistant" && previous?.role === "user"
+                  ? policyFlagId(messageText(previous.parts))
+                  : null
+              const laterUser = messages
+                .slice(index + 1)
+                .some((item) => item.role === "user")
               const showText = text.length > 0 && text !== caption
               return (
                 <li
@@ -740,9 +879,13 @@ export function AssistantChat({
                   }
                 >
                   <AssistantImagePreviews items={chips} />
-                  {chips.some((chip) => !chip.mediaType.startsWith("image/")) ? (
+                  {chips.some(
+                    (chip) => !chip.mediaType.startsWith("image/")
+                  ) ? (
                     <AssistantAttachmentChips
-                      items={chips.filter((chip) => !chip.mediaType.startsWith("image/"))}
+                      items={chips.filter(
+                        (chip) => !chip.mediaType.startsWith("image/")
+                      )}
                     />
                   ) : null}
                   {showText ? (
@@ -762,7 +905,10 @@ export function AssistantChat({
                   ))}
                   {proposals.map((item) =>
                     item.status === "cancelled" ? (
-                      <p key={item.id} className="my-3 text-sm text-muted-foreground">
+                      <p
+                        key={item.id}
+                        className="my-3 text-sm text-muted-foreground"
+                      >
                         {item.result}
                       </p>
                     ) : item.status === "confirmed" ? (
@@ -775,7 +921,10 @@ export function AssistantChat({
                         onConfirm={() => {
                           const next = {
                             ...findingRef.current,
-                            [item.id]: { status: "confirmed" as const, result: "Recorded." },
+                            [item.id]: {
+                              status: "confirmed" as const,
+                              result: "Recorded.",
+                            },
                           }
                           findingRef.current = next
                           setFindingOutcomes(next)
@@ -814,7 +963,9 @@ export function AssistantChat({
                           ...ratingRef.current,
                           [item.id]: {
                             status: "done" as const,
-                            result: result.message ?? "Saved. The rating is on the internal audit.",
+                            result:
+                              result.message ??
+                              "Saved. The rating is on the internal audit.",
                           },
                         }
                         ratingRef.current = next
@@ -825,7 +976,10 @@ export function AssistantChat({
                       onCancel={() => {
                         const next = {
                           ...ratingRef.current,
-                          [item.id]: { status: "cancelled" as const, result: "Cancelled. Nothing was saved." },
+                          [item.id]: {
+                            status: "cancelled" as const,
+                            result: "Cancelled. Nothing was saved.",
+                          },
                         }
                         ratingRef.current = next
                         setRatingOutcomes(next)
@@ -868,10 +1022,49 @@ export function AssistantChat({
                           onCancel={cancelTask}
                         />
                       ))}
+                  {flaggedId && text && !live && !laterUser ? (
+                    <PolicyComplianceChoice
+                      policyId={flaggedId}
+                      changes={text.slice(0, 2000)}
+                      canAssign={canAssign}
+                      onImplement={() =>
+                        ask(
+                          "Implement these changes in a revised policy for the same practice standard. Draft the full policy."
+                        )
+                      }
+                    />
+                  ) : null}
+                  {assignments.map((assignment) => (
+                    <AssistantAssignCard
+                      key={assignment.id}
+                      assignment={assignment}
+                      onAssigned={(result) => {
+                        const next = {
+                          ...assignmentRef.current,
+                          [assignment.id]: { status: "done" as const, result },
+                        }
+                        assignmentRef.current = next
+                        setAssignmentOutcomes(next)
+                        persistRef.current(messagesRef.current)
+                      }}
+                      onCancel={() => {
+                        const next = {
+                          ...assignmentRef.current,
+                          [assignment.id]: {
+                            status: "cancelled" as const,
+                            result: "Cancelled. Nothing was assigned.",
+                          },
+                        }
+                        assignmentRef.current = next
+                        setAssignmentOutcomes(next)
+                        persistRef.current(messagesRef.current)
+                      }}
+                    />
+                  ))}
                 </li>
               )
             })}
-            {error ? (
+            {error && !upgrade ? (
               <li className="grid justify-items-start gap-2">
                 <p className="text-sm text-destructive">{error.message}</p>
                 <button
@@ -902,7 +1095,8 @@ export function AssistantChat({
               </h1>
               {audit ? (
                 <p className="mt-2 text-center text-sm text-muted-foreground">
-                  A check of what is actually happening, before an external audit. Each gap comes back with a next action.
+                  A check of what is actually happening, before an external
+                  audit. Each gap comes back with a next action.
                 </p>
               ) : null}
               {audit && auditChoices.length > 0 ? (
@@ -910,6 +1104,11 @@ export function AssistantChat({
               ) : null}
               <div className="mt-6">
                 {importCard}
+                {upgrade ? (
+                  <div className="mb-3">
+                    <UpgradeNotice upgrade={upgrade} />
+                  </div>
+                ) : null}
                 <Composer
                   input={input}
                   setInput={setInput}
@@ -932,8 +1131,14 @@ export function AssistantChat({
       </div>
       {started ? (
         <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-          {notice ? (
-            <p className="mb-2 text-center text-xs text-destructive">{notice}</p>
+          {upgrade ? (
+            <div className="mb-2">
+              <UpgradeNotice upgrade={upgrade} />
+            </div>
+          ) : notice ? (
+            <p className="mb-2 text-center text-xs text-destructive">
+              {notice}
+            </p>
           ) : null}
           {importCard}
           <Composer
@@ -949,12 +1154,30 @@ export function AssistantChat({
             onFiles={takeFiles}
           />
         </div>
-      ) : notice || error ? (
+      ) : !upgrade && (notice || error) ? (
         <p className="pb-4 text-center text-xs text-destructive">
           {notice ?? error?.message}
         </p>
       ) : null}
     </div>
+  )
+}
+
+function UpgradeNotice({ upgrade }: { upgrade: AssistantUpgrade }) {
+  return (
+    <p className="text-center text-sm text-muted-foreground">
+      {upgrade.message}{" "}
+      {upgrade.href ? (
+        <Link
+          href={upgrade.href}
+          className="font-medium text-primary underline-offset-2 hover:underline"
+        >
+          {upgrade.label}
+        </Link>
+      ) : upgrade.label === "Upgrade" ? (
+        "Ask an administrator to upgrade the plan."
+      ) : null}
+    </p>
   )
 }
 
@@ -1042,7 +1265,11 @@ function Composer({
               if (!pasteAsAttachment(text)) return
               event.preventDefault()
               onFiles(
-                [new File([text], pastedTextName(attachmentNames), { type: "text/plain" })],
+                [
+                  new File([text], pastedTextName(attachmentNames), {
+                    type: "text/plain",
+                  }),
+                ],
                 "paste"
               )
             }}
@@ -1059,7 +1286,13 @@ function Composer({
             className="max-h-40 min-h-8 flex-1 resize-none border-0 bg-transparent px-1 py-1 text-base leading-6 shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"
           />
           {busy ? (
-            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={onStop}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={onStop}
+            >
               Stop
             </Button>
           ) : (
@@ -1079,7 +1312,11 @@ function Composer({
   )
 }
 
-function composerPlaceholder(interview: boolean, audit: boolean, imports: boolean) {
+function composerPlaceholder(
+  interview: boolean,
+  audit: boolean,
+  imports: boolean
+) {
   if (interview) return "Your answer"
   if (audit) return "What should we review?"
   if (imports) return "Ask anything, or paste a staff list"
@@ -1096,7 +1333,10 @@ function composerChips(items: ComposerFile[]): AssistantAttachmentChip[] {
   }))
 }
 
-function messageChips(message: UIMessage, stored?: AssistantStoredMessage): AssistantAttachmentChip[] {
+function messageChips(
+  message: UIMessage,
+  stored?: AssistantStoredMessage
+): AssistantAttachmentChip[] {
   const fromParts = message.parts.flatMap((part) => {
     if (part.type !== "file") return []
     return [
@@ -1113,7 +1353,8 @@ function messageChips(message: UIMessage, stored?: AssistantStoredMessage): Assi
     id: `${file.name}-${file.mediaType}`,
     name: file.name,
     mediaType: file.mediaType,
-    previewUrl: file.url && file.mediaType.startsWith("image/") ? file.url : null,
+    previewUrl:
+      file.url && file.mediaType.startsWith("image/") ? file.url : null,
   }))
 }
 
@@ -1121,6 +1362,16 @@ function releaseAttachments(items: readonly ComposerFile[]) {
   for (const item of items) {
     if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
   }
+}
+
+async function loadPolicyFile(flag: { id: string; filename: string }) {
+  const response = await fetch(`/api/policies/${flag.id}`)
+  if (!response.ok) return null
+  const blob = await response.blob()
+  if (blob.size < 1 || blob.size > attachmentByteLimit) return null
+  return new File([blob], flag.filename, {
+    type: blob.type || "application/octet-stream",
+  })
 }
 
 function toFileList(files: File[]) {
@@ -1135,8 +1386,10 @@ function isStaffRoster(file: File) {
 }
 
 function shouldImportNow(files: readonly File[]) {
-  if (files.length === 0 || files.some((file) => file.name.startsWith("."))) return false
-  if (files.every((file) => /\.(csv|tsv|txt|xlsx?)$/i.test(file.name))) return true
+  if (files.length === 0 || files.some((file) => file.name.startsWith(".")))
+    return false
+  if (files.every((file) => /\.(csv|tsv|txt|xlsx?)$/i.test(file.name)))
+    return true
   return (
     files.length > attachmentCountLimit &&
     files.every((file) => /\.(pdf|png|jpe?g)$/i.test(file.name))
@@ -1161,7 +1414,8 @@ function filesFromTransfer(transfer: DataTransfer): Promise<File[]> {
   const entries = [...transfer.items]
     .map((item) => item.webkitGetAsEntry())
     .filter((entry): entry is DropEntry => entry !== null)
-  if (!entries.some((entry) => entry.isDirectory)) return Promise.resolve([...transfer.files])
+  if (!entries.some((entry) => entry.isDirectory))
+    return Promise.resolve([...transfer.files])
   return collectDropped(entries)
 }
 

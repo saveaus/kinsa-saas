@@ -1,15 +1,17 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 
 import { ActionForm } from "@/components/action-form"
 import { OrganisationLogoForm } from "@/components/organisation-logo-form"
-import { RegistrationGroupCheckboxes } from "@/components/registration-group-checkboxes"
 import { SettingsFrame, SettingsSection } from "@/components/settings-frame"
+import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatAbn } from "@/lib/abn"
-import { registrationGroupLabel } from "@/lib/ndis-registration-groups"
+import { selectedRegistrationGroupsByCategory } from "@/lib/ndis-registration-groups"
 import { can, requireTenant } from "@/lib/tenant"
 import { updateOrganisationIdentityAction } from "@/modules/organisations/actions"
+import { cn } from "cn"
 
 export default async function GeneralSettingsPage() {
   const { context } = await requireTenant()
@@ -81,9 +83,9 @@ export default async function GeneralSettingsPage() {
               title="Registration"
               description="The classes of support this provider is approved to deliver."
             >
-              <RegistrationGroupCheckboxes
-                selected={context.organisationRegistrationGroups}
-                legend="NDIS registration groups"
+              <SelectedRegistrationGroups
+                codes={context.organisationRegistrationGroups}
+                canEdit
               />
             </SettingsSection>
           </ActionForm>
@@ -114,19 +116,54 @@ export default async function GeneralSettingsPage() {
               </div>
             </SettingsSection>
             <SettingsSection title="Registration">
-              {context.organisationRegistrationGroups.length === 0 ? (
-                <p className="text-sm text-muted-foreground">None recorded.</p>
-              ) : (
-                <ul className="grid gap-1 text-sm text-muted-foreground">
-                  {context.organisationRegistrationGroups.map((code) => (
-                    <li key={code}>{registrationGroupLabel(code)}</li>
-                  ))}
-                </ul>
-              )}
+              <SelectedRegistrationGroups
+                codes={context.organisationRegistrationGroups}
+              />
             </SettingsSection>
           </>
         )}
       </div>
     </SettingsFrame>
+  )
+}
+
+function SelectedRegistrationGroups({
+  codes,
+  canEdit = false,
+}: {
+  codes: readonly string[]
+  canEdit?: boolean
+}) {
+  const sections = selectedRegistrationGroupsByCategory(codes)
+
+  return (
+    <div className="grid gap-4">
+      {sections.length === 0 ? (
+        <p className="text-sm text-muted-foreground">None recorded.</p>
+      ) : (
+        sections.map((section) => (
+          <div key={section.category} className="grid gap-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              {section.category}
+            </p>
+            <ul className="grid gap-1 text-sm">
+              {section.groups.map((group) => (
+                <li key={group.code}>
+                  {group.code} · {group.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+      {canEdit ? (
+        <Link
+          href="/settings/registration-groups"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit")}
+        >
+          Edit
+        </Link>
+      ) : null}
+    </div>
   )
 }

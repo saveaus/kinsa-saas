@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { registeredError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
+import { logFileHref, logRegisterRoute, uniqueLogSlug } from "@/modules/logs/standing"
 
 export type LogActionState = { error?: string; message?: string; href?: string }
 
@@ -88,7 +89,9 @@ export async function deleteLogRegisterAction(
     return { error: "Remove is only available before an entry is accepted." }
   }
 
-  const paths = (entries ?? []).map((entry) => entry.storage_path)
+  const paths = (entries ?? []).flatMap((entry) =>
+    entry.storage_path ? [entry.storage_path] : []
+  )
   if ((entries ?? []).length > 0) {
     const { error } = await supabase
       .from("log_entries")
@@ -283,7 +286,9 @@ export async function deleteLogEntryDraftAction(
     .eq("id", entryId)
     .eq("status", "draft")
   if (error) return { error: error.message }
-  await supabase.storage.from("logs").remove([existing.storage_path])
+  if (existing.storage_path) {
+    await supabase.storage.from("logs").remove([existing.storage_path])
+  }
   const { data: register } = await supabase
     .from("log_registers")
     .select("slug")
@@ -294,5 +299,241 @@ export async function deleteLogEntryDraftAction(
   })
   refresh(register?.slug, existing.participant_id, existing.worker_id)
   return { message: "Draft removed." }
+}
+
+const datePattern = /^\d{4}-\d{2}-\d{2}$/
+const personPattern = /^(participant|worker):([0-9a-f-]{36})$/i
+
+export async function createLogAction(
+  _prev: LogActionState,
+  formData: FormData
+): Promise<LogActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+
+  const name = clean(formData.get("name"))
+  if (name.length < 1 || name.length > 160) {
+    return { error: "Enter a log name." }
+  }
+  const route = logRegisterRoute(
+    String(formData.get("route") ?? ""),
+    String(formData.get("person") ?? "")
+  )
+  if (!route) return { error: "Choose where this log lives." }
+
+  const supabase = await createServerSupabase()
+  if (route.participant_id) {
+    const { data, error } = await supabase
+      .from("participants")
+      .select("id")
+      .eq("id", route.participant_id)
+      .eq("organisation_id", context.organisationId)
+      .maybeSingle()
+    if (error) return { error: error.message }
+    if (!data) return { error: "Choose a person in this organisation." }
+  }
+  if (route.worker_id) {
+    const { data, error } = await supabase
+      .from("workers")
+      .select("id")
+      .eq("id", route.worker_id)
+      .eq("organisation_id", context.organisationId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (error) return { error: error.message }
+    if (!data) return { error: "Choose a person in this organisation." }
+  }
+
+  const { data: taken, error: takenError } = await supabase
+    .from("log_registers")
+    .select("slug")
+    .eq("organisation_id", context.organisationId)
+  if (takenError) return { error: takenError.message }
+  const slug = uniqueLogSlug(
+    (taken ?? []).map((row) => row.slug),
+    name
+  )
+  const id = crypto.randomUUID()
+  const { error } = await supabase.from("log_registers").insert({
+    id,
+    organisation_id: context.organisationId,
+    name,
+    slug,
+    visible: true,
+    scope: route.scope,
+    subject: route.subject,
+    participant_id: route.participant_id,
+    worker_id: route.worker_id,
+    built_in: null,
+    emoji: "📋",
+  })
+  if (error) return { error: error.message }
+  await recordAudit("log.created", "log_register", id, { name, slug })
+  refresh(slug, route.participant_id, route.worker_id)
+  return { message: "Log saved.", href: logFileHref(id) }
+}
+
+export async function saveLogEntryAction(
+  registerId: string,
+  _prev: LogActionState,
+  formData: FormData
+): Promise<LogActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+
+  const summary = clean(formData.get("name"))
+  if (summary.length < 1 || summary.length > 160) {
+    return { error: "Enter an entry name." }
+  }
+  const occurredOn = String(formData.get("occurred_on") ?? "")
+  if (!datePattern.test(occurredOn)) return { error: "Choose a created date." }
+  const dueRaw = String(formData.get("due_on") ?? "").trim()
+  const dueOn = dueRaw.length > 0 ? dueRaw : null
+  if (dueOn && !datePattern.test(dueOn)) return { error: "Choose a due date." }
+  const remind = formData.get("remind") === "on" && Boolean(dueOn)
+
+  const people = formData
+    .getAll("people")
+    .map((value) => String(value))
+    .filter((value, index, all) => all.indexOf(value) === index)
+  if (people.length === 0) return { error: "Choose at least one person." }
+  const parsed = people.flatMap((value) => {
+    const match = personPattern.exec(value)
+    if (!match) return []
+    return [{ kind: match[1].toLowerCase(), id: match[2] }]
+  })
+  if (parsed.length !== people.length) {
+    return { error: "Choose a person in this organisation." }
+  }
+
+  const files = formData
+    .getAll("files")
+    .filter((value): value is File => value instanceof File && value.size > 0)
+  if (files.length > 8) return { error: "Add up to 8 attachments." }
+  for (const file of files) {
+    if (!ALLOWED_TYPES.has(file.type) || file.size > MAX_BYTES) {
+      return { error: "Attachments must be PDF, JPEG, or PNG under 10 MB." }
+    }
+  }
+
+  const supabase = await createServerSupabase()
+  const { data: register, error: registerError } = await supabase
+    .from("log_registers")
+    .select("id, name, slug, visible, built_in")
+    .eq("id", registerId)
+    .eq("organisation_id", context.organisationId)
+    .maybeSingle()
+  if (registerError) return { error: registerError.message }
+  if (!register || register.built_in || !register.visible) {
+    return { error: "That log is not available." }
+  }
+
+  const participantIds = parsed.flatMap((person) =>
+    person.kind === "participant" ? [person.id] : []
+  )
+  const workerIds = parsed.flatMap((person) =>
+    person.kind === "worker" ? [person.id] : []
+  )
+  if (participantIds.length > 0) {
+    const { data, error } = await supabase
+      .from("participants")
+      .select("id")
+      .eq("organisation_id", context.organisationId)
+      .in("id", participantIds)
+    if (error) return { error: error.message }
+    if ((data ?? []).length !== participantIds.length) {
+      return { error: "Choose a person in this organisation." }
+    }
+  }
+  if (workerIds.length > 0) {
+    const { data, error } = await supabase
+      .from("workers")
+      .select("id")
+      .eq("organisation_id", context.organisationId)
+      .is("deleted_at", null)
+      .in("id", workerIds)
+    if (error) return { error: error.message }
+    if ((data ?? []).length !== workerIds.length) {
+      return { error: "Choose a person in this organisation." }
+    }
+  }
+
+  const entryId = crypto.randomUUID()
+  const acceptedAt = new Date().toISOString()
+  const { error } = await supabase.from("log_entries").insert({
+    id: entryId,
+    organisation_id: context.organisationId,
+    register_id: register.id,
+    summary,
+    occurred_on: occurredOn,
+    due_on: dueOn,
+    remind,
+    status: "accepted",
+    drafted_by: "person",
+    created_by: context.userId,
+    accepted_by: context.userId,
+    accepted_at: acceptedAt,
+  })
+  if (error) return { error: error.message }
+
+  const { error: peopleError } = await supabase.from("log_entry_people").insert(
+    parsed.map((person) => ({
+      organisation_id: context.organisationId,
+      entry_id: entryId,
+      participant_id: person.kind === "participant" ? person.id : null,
+      worker_id: person.kind === "worker" ? person.id : null,
+    }))
+  )
+  if (peopleError) {
+    await supabase.from("log_entries").delete().eq("id", entryId)
+    return { error: peopleError.message }
+  }
+
+  const uploaded: string[] = []
+  for (const file of files) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+    const storagePath = `${context.organisationId}/${entryId}/${crypto.randomUUID()}-${safeName}`
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const { error: uploadError } = await supabase.storage
+      .from("logs")
+      .upload(storagePath, bytes, { contentType: file.type, upsert: false })
+    if (uploadError) {
+      if (uploaded.length > 0) await supabase.storage.from("logs").remove(uploaded)
+      await supabase.from("log_entries").delete().eq("id", entryId)
+      return { error: uploadError.message }
+    }
+    uploaded.push(storagePath)
+    const { error: fileError } = await supabase.from("log_entry_files").insert({
+      organisation_id: context.organisationId,
+      entry_id: entryId,
+      storage_path: storagePath,
+      original_filename: file.name,
+      mime_type: file.type,
+      file_size_bytes: file.size,
+    })
+    if (fileError) {
+      await supabase.storage.from("logs").remove(uploaded)
+      await supabase.from("log_entries").delete().eq("id", entryId)
+      return { error: fileError.message }
+    }
+  }
+
+  await recordAudit("log.accepted", "log_entry", entryId, {
+    name: register.name,
+    summary,
+    draftedBy: "person",
+  })
+  revalidatePath(logFileHref(register.id))
+  revalidatePath("/dashboard")
+  refresh(register.slug)
+  for (const participantId of participantIds) {
+    revalidatePath(`/participants/${participantId}`)
+  }
+  for (const workerId of workerIds) revalidatePath(`/workers/${workerId}`)
+  return { message: "Entry saved." }
 }
 

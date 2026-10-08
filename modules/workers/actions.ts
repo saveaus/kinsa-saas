@@ -8,6 +8,7 @@ import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { requestAppUrl } from "@/lib/request-app-url"
 import { assertRateLimit } from "@/lib/rate-limit"
 import { createServerSupabase } from "@/lib/supabase/server"
+import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
 import { syncSubscriptionSeats } from "@/modules/billing/stripe"
@@ -121,6 +122,33 @@ export async function deleteWorkerAction(
   requirePermission(context, "workers.manage")
 
   const supabase = await createServerSupabase()
+  const { data: existing, error: existingError } = await supabase
+    .from("workers")
+    .select("user_id")
+    .eq("id", workerId)
+    .eq("organisation_id", context.organisationId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (existingError) return { error: existingError.message }
+  if (!existing) return { error: "Worker not found." }
+
+  if (existing.user_id) {
+    if (!hasAdminClient()) return { error: "The login could not be removed." }
+    const admin = createAdminSupabase()
+    const { error: membershipError } = await admin
+      .from("memberships")
+      .delete()
+      .eq("user_id", existing.user_id)
+      .eq("organisation_id", context.organisationId)
+    if (membershipError) return { error: membershipError.message }
+
+    const banned = await admin.auth.admin.updateUserById(existing.user_id, {
+      ban_duration: "876000h",
+    })
+    if (banned.error && banned.error.status !== 404) return { error: banned.error.message }
+    await admin.auth.admin.deleteUser(existing.user_id)
+  }
+
   const { data: docs } = await supabase
     .from("documents")
     .select("storage_path")

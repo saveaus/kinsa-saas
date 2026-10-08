@@ -93,7 +93,7 @@ export function prepareAssistantTask(value: unknown, directory: TaskDirectory) {
           kind: "review_documents" as const,
           title: "Check pending documents",
           detail:
-            "Up to 8 pending worker documents will be checked. A file is approved only when it matches the worker, the type, and a current expiry. Anything else is flagged for a person. Nothing changes until you confirm.",
+            "Up to 8 pending worker documents will be checked. The assistant can flag a file for a person. It cannot approve one. Nothing changes until you confirm.",
         },
       }
     case "add_worker": {

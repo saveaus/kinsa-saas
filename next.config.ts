@@ -28,10 +28,14 @@ const nextConfig: NextConfig = {
         destination: "/settings/emails",
         permanent: false,
       },
-      { source: "/logs", destination: "/dashboard", permanent: false },
       {
         source: "/settings/logs",
         destination: "/settings/general",
+        permanent: false,
+      },
+      {
+        source: "/settings/roles",
+        destination: "/settings/teams",
         permanent: false,
       },
       {

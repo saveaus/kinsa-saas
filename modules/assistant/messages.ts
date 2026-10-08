@@ -23,6 +23,13 @@ import {
   type AssistantSnapshot,
 } from "@/modules/assistant/snapshots"
 import {
+  applyAssignmentOutcomes,
+  assignmentsFromParts,
+  parseStoredAssignment,
+  type AssistantStoredAssignment,
+  type AssignmentOutcome,
+} from "@/modules/assistant/assignments"
+import {
   applyTaskOutcomes,
   parseStoredTask,
   tasksFromParts,
@@ -54,6 +61,7 @@ export type AssistantStoredMessage = {
   snapshots?: AssistantSnapshot[]
   policies?: AssistantPolicyDraft[]
   tasks?: AssistantStoredTask[]
+  assignments?: AssistantStoredAssignment[]
   attachments?: AssistantAttachment[]
   proposedFindings?: ProposedFinding[]
   ratings?: AssistantRatingProposal[]
@@ -88,6 +96,7 @@ export function toStoredMessages(
   decisions: {
     findings?: Readonly<Record<string, { status: "confirmed" | "cancelled"; result: string }>>
     ratings?: Readonly<Record<string, { status: "done" | "cancelled"; result: string }>>
+    assignments?: Readonly<Record<string, AssignmentOutcome>>
   } = {}
 ) {
   const prior = new Map(previous.map((message) => [message.id, message]))
@@ -124,9 +133,16 @@ export function toStoredMessages(
       keepList(tasksFromParts(message.parts), earlier?.tasks),
       outcomes
     )
+    const assignments = applyAssignmentOutcomes(
+      keepList(assignmentsFromParts(message.parts), earlier?.assignments),
+      decisions.assignments ?? {}
+    )
     const text =
       typed ||
       (attachments.length > 0 ? attachments.map((file) => file.name).join(", ") : "") ||
+      (message.role === "assistant" && assignments.length > 0
+        ? "Choose who these tasks go to."
+        : "") ||
       (message.role === "assistant" && tasks.length > 0
         ? "Confirm this before anything changes."
         : "") ||
@@ -149,6 +165,7 @@ export function toStoredMessages(
       ...(snapshots.length > 0 ? { snapshots } : {}),
       ...(policies.length > 0 ? { policies } : {}),
       ...(tasks.length > 0 ? { tasks } : {}),
+      ...(assignments.length > 0 ? { assignments } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
       ...(proposedFindings.length > 0 ? { proposedFindings } : {}),
       ...(ratings.length > 0 ? { ratings } : {}),
@@ -224,6 +241,12 @@ export function parseStoredMessages(value: unknown) {
           return task ? [task] : []
         })
       : []
+    const assignments = Array.isArray(record.assignments)
+      ? record.assignments.flatMap((item) => {
+          const assignment = parseStoredAssignment(item)
+          return assignment ? [assignment] : []
+        })
+      : []
     const attachments = Array.isArray(record.attachments)
       ? record.attachments.flatMap((item) => {
           const file = parseAttachment(item)
@@ -251,6 +274,7 @@ export function parseStoredMessages(value: unknown) {
       ...(snapshots.length > 0 ? { snapshots } : {}),
       ...(policies.length > 0 ? { policies } : {}),
       ...(tasks.length > 0 ? { tasks } : {}),
+      ...(assignments.length > 0 ? { assignments } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
       ...(proposedFindings.length > 0 ? { proposedFindings } : {}),
       ...(ratings.length > 0 ? { ratings } : {}),

@@ -6,17 +6,20 @@ import { useState } from "react"
 import { ActionForm } from "@/components/action-form"
 import { AccountPreview } from "@/components/auth-preview"
 import { AuthFrame } from "@/components/auth-frame"
+import { organisationInitials } from "@/components/org-mark"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { signUpAction } from "@/modules/identity/actions"
 
 export function SignupPanel() {
-  const [name, setName] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const name = [firstName, lastName].filter(Boolean).join(" ")
 
   return (
     <AuthFrame
-      step="1/2"
-      title="Create your account"
+      step="1/3"
+      title="Let’s get to know you"
       description="You’ll set up the organisation next and become its administrator."
       preview={<AccountPreview name={name} />}
       aside={
@@ -33,21 +36,53 @@ export function SignupPanel() {
         submitLabel="Continue"
         pendingLabel="Creating account..."
         fullWidth
+        submitClassName="h-10"
         className="gap-4"
       >
-        <Field label="Your name" htmlFor="full_name">
-          <Input
-            id="full_name"
-            name="full_name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Enter your name"
-            autoComplete="name"
-            required
-          />
-        </Field>
+        <div className="flex items-center gap-3">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+            {name ? organisationInitials(name) : null}
+          </span>
+          <div>
+            <p className="text-sm">Your profile</p>
+            <p className="text-xs text-muted-foreground">Shown beside your name in the workspace.</p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="First name" htmlFor="first_name">
+            <Input
+              id="first_name"
+              name="first_name"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              placeholder="Enter your first name"
+              autoComplete="given-name"
+              required
+              className="h-10"
+            />
+          </Field>
+          <Field label="Last name" htmlFor="last_name">
+            <Input
+              id="last_name"
+              name="last_name"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              placeholder="Enter your last name"
+              autoComplete="family-name"
+              className="h-10"
+            />
+          </Field>
+        </div>
         <Field label="Work email" htmlFor="email">
-          <Input id="email" name="email" type="email" placeholder="Enter your work email" autoComplete="email" required />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="you@provider.com.au"
+            autoComplete="email"
+            required
+            className="h-10"
+          />
         </Field>
         <Field label="Password" htmlFor="password">
           <Input
@@ -58,6 +93,7 @@ export function SignupPanel() {
             autoComplete="new-password"
             minLength={8}
             required
+            className="h-10"
           />
         </Field>
       </ActionForm>

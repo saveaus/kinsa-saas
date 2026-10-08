@@ -10,6 +10,7 @@ import { can, requireTenant } from "@/lib/tenant"
 import { allowsRegistered } from "@/modules/billing/access"
 import { getOrganisationBilling } from "@/modules/billing/queries"
 import { stripeConfigured } from "@/modules/billing/stripe"
+import { loadAssistantUpgrade } from "@/modules/assistant/usage"
 
 export default async function StartInternalAuditReviewPage() {
   const { context } = await requireTenant()
@@ -53,10 +54,12 @@ export default async function StartInternalAuditReviewPage() {
     )
   }
 
+  const upgrade = await loadAssistantUpgrade(context.organisationId, manage)
   return (
     <AssistantChat
       mode="internal_audit"
       auditChoices={registrationGroupChoices(context.organisationRegistrationGroups)}
+      upgrade={upgrade}
     />
   )
 }

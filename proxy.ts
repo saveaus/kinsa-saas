@@ -11,6 +11,7 @@ const publicPaths = [
   "/invite",
   "/forgot-password",
   "/reset-password",
+  "/auth",
 ]
 
 export async function proxy(request: NextRequest) {

@@ -11,7 +11,7 @@ export default async function SettingsLayout({
   const { context } = await requireTenant()
 
   return (
-    <div className="grid items-start gap-10 md:grid-cols-[14.5rem_minmax(0,1fr)]">
+    <div className="grid gap-10 md:grid-cols-[14.5rem_minmax(0,1fr)]">
       <SettingsNav admin={can(context, "workers.read_all")} />
       <div className="min-w-0">{children}</div>
     </div>
