@@ -1,10 +1,10 @@
-export type SettingsGroup = "Account" | "Organisation" | "Notifications"
+export type SettingsGroup = "Account" | "Organisation"
 
 export type SettingsSection = {
   href: string
   label: string
   group: SettingsGroup
-  /** Account is available to every signed-in person. Organisation and notifications are for administrators. */
+  /** Account is available to every signed-in person. Organisation is for administrators. */
   audience: "everyone" | "admin"
   description: string
 }
@@ -56,17 +56,6 @@ export const settingsSections: SettingsSection[] = [
     description:
       "Update your payment information or switch plans according to your needs.",
   },
-  {
-    href: "/settings/emails",
-    label: "Automatic emails",
-    group: "Notifications",
-    audience: "admin",
-    description: "Follow-up emails for documents.",
-  },
 ]
 
-export const settingsGroups: SettingsGroup[] = [
-  "Account",
-  "Organisation",
-  "Notifications",
-]
+export const settingsGroups: SettingsGroup[] = ["Account", "Organisation"]

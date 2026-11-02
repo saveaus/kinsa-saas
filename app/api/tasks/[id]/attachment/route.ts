@@ -4,6 +4,7 @@ import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
+import { requireRegistered } from "@/modules/billing/guard"
 
 export async function GET(
   _request: Request,
@@ -11,6 +12,7 @@ export async function GET(
 ) {
   const { id } = await params
   const { context } = await requireTenant()
+  await requireRegistered(context)
   if (!hasAdminClient()) {
     return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
   }
@@ -33,7 +35,12 @@ export async function GET(
     .eq("id", task.policy_id)
     .eq("organisation_id", context.organisationId)
     .maybeSingle()
-  if (!policy?.storage_path || !policy.mime_type || !policy.original_filename) {
+  // This reads with the service role, so the path has to be this organisation's.
+  if (
+    !policy?.storage_path?.startsWith(`${context.organisationId}/`) ||
+    !policy.mime_type ||
+    !policy.original_filename
+  ) {
     return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
   }
 

@@ -128,7 +128,7 @@ export function WorkerRecord({
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <BackLink href="/workers" />
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-medium text-primary">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-[11px] font-semibold text-foreground">
             {initials}
           </span>
           <h2 className="truncate text-[15px] font-medium">{name}</h2>
@@ -275,12 +275,19 @@ export function WorkerRecord({
             ) : (
               <ul>
                 {files.map((file) => (
-                  <li key={file.id} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/60">
-                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                    <Chip tone={file.tone}>{file.status}</Chip>
-                    <span className="shrink-0 text-muted-foreground">{file.expiry}</span>
-                    <DocumentViewButton documentId={file.id} />
+                  <li
+                    key={file.id}
+                    className="grid h-9 grid-cols-[1rem_minmax(0,1fr)_7.5rem_11rem_4.25rem] items-center gap-x-3 rounded-md px-2 text-sm hover:bg-muted/60"
+                  >
+                    <FileText className="size-4 text-muted-foreground" />
+                    <span className="min-w-0 truncate">{file.name}</span>
+                    <Chip tone={file.tone} className="w-fit max-w-full">
+                      {file.status}
+                    </Chip>
+                    <span className="truncate text-muted-foreground">{file.expiry}</span>
+                    <span className="justify-self-end">
+                      <DocumentViewButton documentId={file.id} />
+                    </span>
                   </li>
                 ))}
               </ul>

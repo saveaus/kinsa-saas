@@ -24,26 +24,34 @@ export type AssignmentRequest =
   | { kind: "compliance"; mode: "target"; percent: number }
   | { kind: "compliance"; mode: "count"; count: number }
 
+// Questions about a topic must reach the model. Only a clear request for tasks skips it.
+const notAskingForTasks =
+  /^(?:why|who|when|where|which|do|does|did|is|are|was|were|has|have|had|will|should|can i|could i)\b/i
+const politeOpening = "(?:please\\s+|can\\s+you\\s+|could\\s+you\\s+|would\\s+you\\s+)?"
+const singleTask = new RegExp(
+  `^${politeOpening}(?:create|add|make|assign)\\s+(?:me\\s+)?(?:(?:a|an|the|new)\\s+)*task(?:\\s*[:-]\\s*|\\s+(?:to|for|called|named)\\s+|\\s+)(.+)$`,
+  "i"
+)
+
 export function assignmentRequest(text: string): AssignmentRequest | null {
   const compact = text.replace(/\s+/g, " ").trim()
   if (!compact) return null
+  const task = compact.match(singleTask)
+  const title = clean(task?.[1]?.replace(/[?]+$/, ""), 160)
+  if (title) return { kind: "task", title, detail: "" }
+  if (notAskingForTasks.test(compact)) return null
   const more = compact.match(/(\d{1,3})\s*%\s*more\s+compliant/i)
   if (more?.[1]) return { kind: "compliance", mode: "lift", points: clampPoints(more[1]) }
   const by = compact.match(
-    /(?:raise|increase|improve|lift)\s+(?:our\s+|the\s+)?compliance(?:\s+\w+){0,4}\s+by\s+(\d{1,3})/i
+    /\b(?:raise|increase|improve|lift)\s+(?:our\s+|the\s+)?compliance(?:\s+\w+){0,4}\s+by\s+(\d{1,3})/i
   )
   if (by?.[1]) return { kind: "compliance", mode: "lift", points: clampPoints(by[1]) }
   const target = compact.match(
-    /(?:readiness|compliance|compliant)\s+(?:up\s+)?to\s+(\d{1,3})\s*%/i
+    /\b(?:get|getting|raise|lift|bring|take|increase|improve|push|reach)\b[^.?!]*\b(?:readiness|compliance|compliant)\s+(?:up\s+)?to\s+(\d{1,3})\s*%/i
   )
   if (target?.[1]) return { kind: "compliance", mode: "target", percent: clampPoints(target[1]) }
   const counted = askedCount(compact)
   if (counted != null) return { kind: "compliance", mode: "count", count: counted }
-  const task = compact.match(
-    /(?:create|add|make|assign)\s+(?:me\s+)?(?:a\s+)?task\s+(?:to\s+|for\s+)?(.+)/i
-  )
-  const title = clean(task?.[1], 160)
-  if (title) return { kind: "task", title, detail: "" }
   return null
 }
 
@@ -225,13 +233,22 @@ function parsePeople(value: unknown): AssignmentPerson[] {
 
 function askedCount(text: string) {
   const amount = "(one|two|three|four|five|six|seven|eight|nine|ten|\\d{1,2})"
-  const priority = new RegExp(`\\b${amount}\\s+(?:most\\s+)?(?:crucial|important|urgent|key)\\b`, "i")
-  const top = new RegExp(`\\b(?:top|first)\\s+${amount}\\b`, "i")
-  const things = new RegExp(
-    `\\b${amount}\\s+(?:things|tasks|items|actions)\\s+to\\s+(?:do|complete|finish)\\b`,
+  const lead = "(?:a\\s+list\\s+of\\s+)?(?:the\\s+)?(?:(?:top|first)\\s+)?"
+  const kind = "(?:(?:most\\s+)?(?:crucial|important|urgent|key|critical)\\s+)?"
+  const noun = "(?:things?|tasks?|items?|actions?|priorities|jobs?)"
+  const doing =
+    "\\s+(?:to|we|i)\\s+(?:should\\s+|need\\s+to\\s+|must\\s+)?(?:do|complete|finish|fix|work\\s+on)"
+  const when = "(?:\\s+(?:today|now|next|first|this\\s+week))?"
+  // Anchored at both ends, so "give me three key things about privacy" stays a question.
+  const told = new RegExp(
+    `^${politeOpening}(?:give|show|list|assign|create|make|get|tell|send|find)(?:\\s+(?:me|us))?\\s+${lead}${amount}\\s+${kind}${noun}(?:${doing})?${when}\\s*[.!?]*$`,
     "i"
   )
-  const raw = (text.match(priority) ?? text.match(top) ?? text.match(things))?.[1]
+  const asked = new RegExp(
+    `^what\\s+are\\s+${lead}${amount}\\s+${kind}${noun}${doing}${when}\\s*[.!?]*$`,
+    "i"
+  )
+  const raw = (text.match(told) ?? text.match(asked))?.[1]
   if (!raw) return null
   const words: Record<string, number> = {
     one: 1,

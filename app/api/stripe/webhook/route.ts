@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
-      const subscription = event.data.object
+      // Events can arrive late or out of order, so apply what Stripe holds now.
+      const subscription = await stripe.subscriptions.retrieve(
+        event.data.object.id
+      )
       await applySubscription(
         subscription,
         subscription.metadata.organisationId

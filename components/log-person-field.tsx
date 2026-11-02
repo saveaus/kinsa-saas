@@ -51,7 +51,7 @@ export function LogPersonField({
             <button
               key={person.key}
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border-0 bg-[#F1F2F4] px-2 py-0.5 text-xs text-[#5E6570] dark:bg-[#32363C] dark:text-[#C8CDD4]"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground hover:bg-muted"
               onClick={() =>
                 setSelected((current) =>
                   current.filter((item) => item !== person.key)

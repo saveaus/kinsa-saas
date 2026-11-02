@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import {
@@ -105,14 +106,18 @@ export async function listCustomLogs(context: TenantContext) {
   const logs = (await listLogRegisters(context)).filter((log) => !log.built_in)
   if (logs.length === 0) return []
   const supabase = await createServerSupabase()
-  const { data, error } = await supabase
-    .from("log_entries")
-    .select("register_id")
-    .eq("organisation_id", context.organisationId)
-    .in(
-      "register_id",
-      logs.map((log) => log.id)
-    )
+  const { data, error } = await fetchAll((from, to) =>
+      supabase
+      .from("log_entries")
+      .select("register_id")
+      .eq("organisation_id", context.organisationId)
+      .in(
+        "register_id",
+        logs.map((log) => log.id)
+      )
+      .order("id")
+      .range(from, to)
+  )
   if (error) throw new Error(error.message)
   const counts = new Map<string, number>()
   for (const row of data ?? []) {
@@ -131,6 +136,7 @@ export type SavedLogEntry = {
   summary: string
   occurredOn: string
   dueOn: string | null
+  completedAt: string | null
   remind: boolean
   people: string
   files: SavedLogFile[]
@@ -141,14 +147,18 @@ export async function listSavedEntries(
   registerId: string
 ): Promise<SavedLogEntry[]> {
   const supabase = await createServerSupabase()
-  const { data: entries, error } = await supabase
-    .from("log_entries")
-    .select(
-      "id, summary, occurred_on, due_on, remind, participant_id, worker_id, storage_path, original_filename"
-    )
-    .eq("organisation_id", context.organisationId)
-    .eq("register_id", registerId)
-    .order("occurred_on", { ascending: false })
+  const { data: entries, error } = await fetchAll((from, to) =>
+      supabase
+      .from("log_entries")
+      .select(
+        "id, summary, occurred_on, due_on, completed_at, remind, participant_id, worker_id, storage_path, original_filename"
+      )
+      .eq("organisation_id", context.organisationId)
+      .eq("register_id", registerId)
+      .order("occurred_on", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   if (error) throw new Error(error.message)
   const rows = entries ?? []
   if (rows.length === 0) return []
@@ -229,6 +239,7 @@ export async function listSavedEntries(
       summary: entry.summary,
       occurredOn: entry.occurred_on,
       dueOn: entry.due_on,
+      completedAt: entry.completed_at,
       remind: entry.remind,
       people: people.join(", ") || "—",
       files,
@@ -256,14 +267,18 @@ export async function listLogEntries(
   registerId: string
 ) {
   const supabase = await createServerSupabase()
-  const { data, error } = await supabase
-    .from("log_entries")
-    .select(
-      "id, register_id, summary, occurred_on, participant_id, worker_id, status, original_filename, mime_type, drafted_by"
-    )
-    .eq("organisation_id", context.organisationId)
-    .eq("register_id", registerId)
-    .order("occurred_on", { ascending: false })
+  const { data, error } = await fetchAll((from, to) =>
+      supabase
+      .from("log_entries")
+      .select(
+        "id, register_id, summary, occurred_on, participant_id, worker_id, status, original_filename, mime_type, drafted_by"
+      )
+      .eq("organisation_id", context.organisationId)
+      .eq("register_id", registerId)
+      .order("occurred_on", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
 
   if (error) throw new Error(error.message)
   return withEntryNames(data ?? [])

@@ -66,12 +66,23 @@ export function AddIncidentDialog({
   kind,
   participants = [],
   participantId,
+  open: openProp,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   kind: IncidentKind
   participants?: { id: string; name: string }[]
   participantId?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = openProp ?? localOpen
+  function setOpen(next: boolean) {
+    if (openProp === undefined) setLocalOpen(next)
+    onOpenChange?.(next)
+  }
   const copy = dialogCopy(kind)
   const needsParticipant = incidentRequiresParticipant(kind)
   const fieldId = (name: string) => `${kind}_${name}`
@@ -84,14 +95,16 @@ export function AddIncidentDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button size="sm" variant={participantId ? "outline" : "default"} />
-        }
-      >
-        {participantId ? null : <Plus />}
-        {participantId ? "Add" : copy.add}
-      </DialogTrigger>
+      {hideTrigger ? null : (
+        <DialogTrigger
+          render={
+            <Button size="sm" variant={participantId ? "outline" : "default"} />
+          }
+        >
+          {participantId ? null : <Plus />}
+          {participantId ? "Add" : copy.add}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>

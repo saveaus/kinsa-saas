@@ -44,7 +44,7 @@ export default async function GeneralSettingsPage() {
           >
             <SettingsSection
               title="Business details"
-              description="Printed on course certificates."
+              description="Shown on evidence packs and in the workspace."
             >
               <div className="grid gap-4">
                 <div className="grid gap-1.5">

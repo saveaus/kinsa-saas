@@ -8,13 +8,13 @@ import {
   RenamePolicyFileDialog,
 } from "@/components/policy-file-actions"
 import { RecordTable, type RecordRow } from "@/components/record-table"
+import { registeredWall } from "@/components/registered-wall"
 import { formatDate } from "@/lib/format-date"
 import {
   practiceStandardName,
   standardsGrouped,
 } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { categoryLabel } from "@/modules/policies/categories"
 import { getPolicyFile, listPolicies } from "@/modules/policies/queries"
 import {
@@ -49,7 +49,8 @@ export default async function PolicyFilePage({
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const policyFile = await getPolicyFile(context, id)
   if (!policyFile) notFound()
 

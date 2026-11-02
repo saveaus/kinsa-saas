@@ -45,9 +45,9 @@ test("expiries land in the week they fall due", () => {
           expiresOn: "2026-10-06",
         }),
         item({
-          key: "course:1",
+          key: "doc:induction",
           label: "Induction",
-          kind: "course",
+          kind: "document",
           status: "met",
           expiresOn: "2026-10-03",
         }),
@@ -72,11 +72,10 @@ test("expiries land in the week they fall due", () => {
   )
 
   assert.equal(weeks[0]?.label, "28 Sep")
-  assert.equal(weeks[0]?.courses, 1)
-  assert.equal(weeks[0]?.documents, 0)
+  assert.equal(weeks[0]?.documents, 1)
   assert.equal(weeks[1]?.documents, 1)
   assert.equal(
-    weeks.reduce((sum, week) => sum + week.documents + week.courses, 0),
+    weeks.reduce((sum, week) => sum + week.documents, 0),
     2
   )
 })
@@ -87,7 +86,7 @@ test("audit readiness is the share of required items that are current", () => {
     auditReadiness([
       worker("lapsing", [
         item({ key: "a", label: "A", kind: "document", status: "lapsing" }),
-        item({ key: "b", label: "B", kind: "course", status: "pending" }),
+        item({ key: "b", label: "B", kind: "document", status: "pending" }),
       ]),
       worker("noncompliant", [
         item({ key: "c", label: "C", kind: "document", status: "met" }),

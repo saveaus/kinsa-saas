@@ -143,8 +143,8 @@ function DeleteTeamDialog({ team }: { team: TeamRecord }) {
         <DialogHeader>
           <DialogTitle>Delete {team.name}?</DialogTitle>
           <DialogDescription>
-            Move people off this team first. Credentials and courses required
-            for it are cleared. This cannot be undone.
+            Move people off this team first. Credentials required for it are
+            cleared. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <ActionForm

@@ -8,11 +8,11 @@ import { countPhrase, PolicyFolders } from "@/components/policy-folders"
 import { MovePolicyDialog } from "@/components/policy-file-actions"
 import { PolicyFlagLink } from "@/components/policy-flag"
 import { RecordTable, type RecordRow } from "@/components/record-table"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
 import { practiceStandardName } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import {
   categoryLabel,
   isPolicyCategory,
@@ -59,7 +59,8 @@ export default async function PolicyFolderPage({
 
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const registrationGroups = context.organisationRegistrationGroups
   const sections = policySections(registrationGroups)
   const section = sections.find((item) => item.id === category)

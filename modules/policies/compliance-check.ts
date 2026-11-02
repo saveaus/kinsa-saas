@@ -2,6 +2,7 @@ import { inflateRawSync } from "node:zlib"
 
 export const complianceNoteLimit = 400
 export const policyTextLimit = 12000
+const documentXmlLimit = 32 * 1024 * 1024
 
 export type PolicyComplianceRead = {
   current: boolean
@@ -74,7 +75,11 @@ function zipEntry(bytes: Uint8Array, name: string) {
     if (entryName === name) {
       const data = bytes.subarray(dataStart, dataEnd)
       if (method === 0) return new TextDecoder().decode(data)
-      if (method === 8) return new TextDecoder().decode(inflateRawSync(data))
+      if (method === 8) {
+        return new TextDecoder().decode(
+          inflateRawSync(data, { maxOutputLength: documentXmlLimit })
+        )
+      }
       return null
     }
     offset = dataEnd

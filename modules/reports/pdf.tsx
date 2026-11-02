@@ -1,13 +1,9 @@
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer"
 import { format } from "date-fns"
 
-import {
-  packAreaLabel,
-  packReadiness,
-  packStatusLabel,
-  type PackItem,
-} from "@/modules/audit-pack/score"
 import type { WorkerCompliance } from "@/modules/documents/compliance"
+import type { EvidenceSection, OrganisationEvidence } from "@/modules/reports/dossier"
+import { today } from "@/lib/today"
 
 const styles = StyleSheet.create({
   page: { padding: 36, fontSize: 10, fontFamily: "Helvetica" },
@@ -33,65 +29,57 @@ function EvidenceHeader({ organisationName, subtitle }: { organisationName: stri
     <View>
       <Text style={styles.title}>Compliance evidence</Text>
       <Text style={styles.subtitle}>
-        {organisationName} · {subtitle} · Generated {format(new Date(), "d MMM yyyy")}. This is evidence,
+        {organisationName} · {subtitle} · Generated {format(today(), "d MMM yyyy")}. This is evidence,
         not an audit certificate.
       </Text>
     </View>
   )
 }
 
-export async function organisationPdf(
-  organisationName: string,
-  rows: Array<{ worker: WorkerRow; compliance: WorkerCompliance }>,
-  pack: PackItem[] = []
-) {
-  const readiness = packReadiness(pack)
+function EvidenceSectionView({ section }: { section: EvidenceSection }) {
+  return (
+    <View>
+      <Text style={styles.heading}>{section.title}</Text>
+      {section.rows.length === 0 ? (
+        <Text>{section.empty}</Text>
+      ) : (
+        <View>
+          <View style={styles.tableHeader}>
+            {section.columns.map((column) => (
+              <Text key={column} style={styles.col}>
+                {column}
+              </Text>
+            ))}
+          </View>
+          {section.rows.map((row, index) => (
+            <View key={`${section.title}-${index}`} style={styles.tableRow} wrap={false}>
+              {row.map((cell, cellIndex) => (
+                <Text key={`${section.title}-${index}-${cellIndex}`} style={styles.col}>
+                  {cell}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  )
+}
+
+export async function organisationPdf(evidence: OrganisationEvidence) {
   return renderToBuffer(
     <Document title="Compliance evidence">
-      <Page size="A4" style={styles.page}>
-        <EvidenceHeader organisationName={organisationName} subtitle="Organisation pack" />
-        <Text style={styles.heading}>
-          Audit pack {readiness.met} of {readiness.total} ({readiness.percent}%)
+      <Page size="A4" orientation="landscape" style={styles.page}>
+        <EvidenceHeader
+          organisationName={evidence.organisationName}
+          subtitle="Organisation pack"
+        />
+        <Text style={styles.subtitle}>
+          Registration groups: {evidence.groups}. Audit pack {evidence.readiness}.
         </Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.col}>Area</Text>
-          <Text style={{ flex: 2 }}>Item</Text>
-          <Text style={styles.col}>Status</Text>
-          <Text style={{ flex: 2 }}>Detail</Text>
-        </View>
-        {pack.map((item) => (
-          <View key={item.key} style={styles.tableRow} wrap={false}>
-            <Text style={styles.col}>{packAreaLabel(item.area)}</Text>
-            <Text style={{ flex: 2 }}>{item.label}</Text>
-            <Text style={styles.col}>{packStatusLabel(item.status)}</Text>
-            <Text style={{ flex: 2 }}>{item.detail}</Text>
-          </View>
+        {evidence.sections.map((section) => (
+          <EvidenceSectionView key={section.title} section={section} />
         ))}
-        <Text style={styles.heading}>Workforce</Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.col}>Worker</Text>
-          <Text style={styles.col}>Status</Text>
-          <Text style={styles.col}>Score</Text>
-          <Text style={{ flex: 2 }}>Exceptions</Text>
-        </View>
-        {rows.map(({ worker, compliance }) => {
-          const exceptions = compliance.items
-            .filter((item) => item.status !== "met")
-            .map((item) => `${item.label}: ${item.status}`)
-            .join("; ")
-          return (
-            <View key={`${worker.email}-${worker.last_name}`} style={styles.tableRow} wrap={false}>
-              <Text style={styles.col}>
-                {worker.first_name} {worker.last_name}
-              </Text>
-              <Text style={styles.col}>{compliance.overall}</Text>
-              <Text style={styles.col}>
-                {compliance.met}/{compliance.total} ({compliance.percent}%)
-              </Text>
-              <Text style={{ flex: 2 }}>{exceptions || "—"}</Text>
-            </View>
-          )
-        })}
       </Page>
     </Document>
   )
@@ -107,13 +95,6 @@ export async function workerPdf(input: {
     expires_on: string | null
     original_filename: string
     reviewer: string | null
-  }>
-  courses: Array<{
-    title: string
-    status: string
-    score: string
-    completedOn: string
-    validUntil: string
   }>
 }) {
   const workerName = `${input.worker.first_name} ${input.worker.last_name}`
@@ -155,19 +136,6 @@ export async function workerPdf(input: {
             <Text style={styles.cell}>
               {doc.typeName} · {doc.approval_status} · expiry {doc.expires_on ?? "none"} · reviewer{" "}
               {doc.reviewer ?? "—"} · {doc.original_filename}
-            </Text>
-          </View>
-        ))}
-
-        <Text style={styles.heading}>Course completions</Text>
-        {input.courses.length === 0 ? <Text>No enrolments.</Text> : null}
-        {input.courses.map((course) => (
-          <View key={course.title} style={styles.row}>
-            <Text style={styles.cell}>
-              {course.title} — {course.status}
-              {course.score ? ` · ${course.score}` : ""}
-              {course.completedOn ? ` · completed ${course.completedOn}` : ""}
-              {course.validUntil ? ` · valid until ${course.validUntil}` : ""}
             </Text>
           </View>
         ))}

@@ -199,7 +199,7 @@ export async function interviewTurn(context: TenantContext, chatId: string) {
   const supabase = await createServerSupabase()
   const { data: chat } = await supabase
     .from("assistant_chats")
-    .select("id, assignment_id, purpose")
+    .select("id, assignment_id, purpose, messages")
     .eq("id", chatId)
     .eq("organisation_id", context.organisationId)
     .eq("user_id", context.userId)
@@ -286,6 +286,8 @@ export async function interviewTurn(context: TenantContext, chatId: string) {
   return {
     kind: "interview" as const,
     assignmentId: assignment.id,
+    chatId: chat.id,
+    messages: parseStoredMessages(chat.messages),
     instructions: interviewInstructions({
       criterion,
       policyOnFile: (policyResult.data ?? []).length > 0,

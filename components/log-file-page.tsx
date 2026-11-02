@@ -2,15 +2,16 @@ import { notFound } from "next/navigation"
 
 import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
+import { registeredWall } from "@/components/registered-wall"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { getLogEntry, getLogRegister } from "@/modules/logs/queries"
 
 export async function LogFilePage({ slug, id }: { slug: string; id: string }) {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const entry = await getLogEntry(context, id)
   if (!entry) notFound()
   const register = await getLogRegister(context, entry.register_id)

@@ -2,13 +2,13 @@ import { notFound } from "next/navigation"
 
 import { BackLink } from "@/components/back-link"
 import { RecordTable, type RecordRow } from "@/components/record-table"
+import { registeredWall } from "@/components/registered-wall"
 import { UsePolicyTemplateDialog } from "@/components/use-policy-template-dialog"
 import {
   practiceStandardName,
   standardsGrouped,
 } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { categoryLabel, isPolicyCategory } from "@/modules/policies/categories"
 import { listPolicyFiles } from "@/modules/policies/queries"
 import { templatesForOrganisation } from "@/modules/policies/templates"
@@ -31,7 +31,8 @@ export default async function PolicyTemplateFolderPage({
 
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const templates = templatesForOrganisation(
     context.organisationRegistrationGroups
   ).filter((template) => template.category === category)

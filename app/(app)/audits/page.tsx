@@ -1,36 +1,30 @@
 import { ClipboardCheck } from "lucide-react"
 import Link from "next/link"
-import { redirect } from "next/navigation"
 
 import { EmptyState } from "@/components/empty-state"
 import { AuditScope } from "@/components/audit-scope"
+import { registeredWall } from "@/components/registered-wall"
 import { StartInternalAuditDialog } from "@/components/start-internal-audit"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
-import { can, requireTenant } from "@/lib/tenant"
+import { can, requireTenant, type TenantContext } from "@/lib/tenant"
 import { listInternalAuditReviews } from "@/modules/assistant/chats"
-import { allowsRegistered } from "@/modules/billing/access"
-import { getOrganisationBilling } from "@/modules/billing/queries"
-import { stripeConfigured } from "@/modules/billing/stripe"
 import { listInternalAudits } from "@/modules/internal-audits/queries"
 import { auditCatalogue } from "@/lib/audit-catalogue"
 
 export default async function InternalAuditsPage() {
   const { context } = await requireTenant()
-  const manage = can(context, "settings.manage")
-  const billing = await getOrganisationBilling(context.organisationId)
-  const open = allowsRegistered(billing, new Date(), stripeConfigured())
-  if (!open) {
-    if (manage) redirect("/settings/billing")
-    return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="Internal audits are unavailable"
-        description="They are part of the Registered plan."
-      />
-    )
-  }
+  const wall = await registeredWall(context)
+  if (wall) return wall
+  return <InternalAuditsContent context={context} />
+}
 
+async function InternalAuditsContent({
+  context,
+}: {
+  context: TenantContext
+}) {
+  const manage = can(context, "settings.manage")
   const canReview =
     can(context, "workers.read_all") &&
     context.organisationRegistrationGroups.length > 0

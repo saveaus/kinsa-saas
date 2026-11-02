@@ -13,13 +13,16 @@ export default async function LoginPage({
 }) {
   const params = await searchParams
   const expired = params.error === "confirm"
+  const inactive = params.error === "inactive"
   return (
     <AuthFrame
       title="Welcome back"
       description={
         expired
           ? "That confirmation link has expired. Create the account again and open the new email from Kinsa."
-          : undefined
+          : inactive
+            ? "This account is no longer active. Ask your organisation's administrator to restore it."
+            : undefined
       }
       aside={
         <p>

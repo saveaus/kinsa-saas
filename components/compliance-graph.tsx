@@ -11,10 +11,15 @@ const complianceChartConfig = {
 
 export function ComplianceGraph({ percent, score }: { percent: number; score: string }) {
   const current = Math.max(0, Math.min(100, percent))
-  const data = [
-    { key: "met", value: current },
-    { key: "rest", value: 100 - current },
-  ]
+  const data =
+    current <= 0
+      ? [{ key: "rest", value: 100 }]
+      : current >= 100
+        ? [{ key: "met", value: 100 }]
+        : [
+            { key: "met", value: current },
+            { key: "rest", value: 100 - current },
+          ]
 
   return (
     <div className="overflow-hidden px-3 pb-4">
@@ -28,7 +33,8 @@ export function ComplianceGraph({ percent, score }: { percent: number; score: st
               innerRadius={54}
               outerRadius={72}
               startAngle={90}
-              endAngle={-270}
+              endAngle={-269.9}
+              isAnimationActive={false}
               stroke="none"
             >
               {data.map((entry) => (

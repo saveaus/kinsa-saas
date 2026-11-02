@@ -31,13 +31,13 @@ const brand = "var(--primary)"
 function statusSliceColor(status: PackStatus) {
   switch (status) {
     case "overdue":
-      return "oklch(0.563 0.19 36.1)"
+      return "#8a847e"
     case "missing":
-      return brand
+      return "#b7b1ab"
     case "unaccepted":
-      return "oklch(0.735 0.184 53.6)"
+      return "#cfc9c3"
     case "lapsing":
-      return "oklch(0.829 0.154 76.5)"
+      return "#e4dfda"
     case "met":
       return brand
     default: {
@@ -47,10 +47,13 @@ function statusSliceColor(status: PackStatus) {
   }
 }
 
-function readinessReport(readiness: AuditReadiness): ReportModel {
+function readinessReport(
+  readiness: AuditReadiness,
+  scope: "organisation" | "credentials"
+): ReportModel {
   return {
     id: "readiness",
-    title: "Audit readiness",
+    title: scope === "credentials" ? "Worker credentials" : "Audit readiness",
     chart: "gauge",
     figure: `${readiness.percent}%`,
     caption:
@@ -96,9 +99,12 @@ function areaReport(items: PackItem[]): ReportModel {
   }
 }
 
-export function dashboardReports(items: PackItem[]): ReportModel[] {
+export function dashboardReports(
+  items: PackItem[],
+  scope: "organisation" | "credentials" = "organisation"
+): ReportModel[] {
   return [
-    readinessReport(packReadiness(items)),
+    readinessReport(packReadiness(items), scope),
     openItemsReport(items),
     areaReport(items),
   ]

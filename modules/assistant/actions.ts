@@ -94,6 +94,8 @@ export async function updateAssistantChatMessages(
   messages: AssistantStoredMessage[]
 ): Promise<AssistantChatActionResult> {
   const { context } = await requireTenant()
+  const locked = await ownedInterview(id, context)
+  if (locked) return { error: locked }
   const stored = parseStoredMessages(messages)
   if (stored.length === 0) return { error: "The chat is empty." }
 

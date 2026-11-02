@@ -1,31 +1,27 @@
 import { ClipboardCheck } from "lucide-react"
 import Link from "next/link"
-import { redirect } from "next/navigation"
 
 import { AssistantChat } from "@/components/assistant-chat"
 import { EmptyState } from "@/components/empty-state"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
 import { registrationGroupChoices } from "@/lib/ndis-registration-groups"
-import { can, requireTenant } from "@/lib/tenant"
-import { allowsRegistered } from "@/modules/billing/access"
-import { getOrganisationBilling } from "@/modules/billing/queries"
-import { stripeConfigured } from "@/modules/billing/stripe"
+import { can, requireTenant, type TenantContext } from "@/lib/tenant"
 import { loadAssistantUpgrade } from "@/modules/assistant/usage"
 
 export default async function StartInternalAuditReviewPage() {
   const { context } = await requireTenant()
+  const wall = await registeredWall(context)
+  if (wall) return wall
+  return <StartInternalAuditReviewContent context={context} />
+}
+
+async function StartInternalAuditReviewContent({
+  context,
+}: {
+  context: TenantContext
+}) {
   const manage = can(context, "settings.manage")
-  const billing = await getOrganisationBilling(context.organisationId)
-  if (!allowsRegistered(billing, new Date(), stripeConfigured())) {
-    if (manage) redirect("/settings/billing")
-    return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="Internal audits are unavailable"
-        description="They are part of the Registered plan."
-      />
-    )
-  }
 
   if (!can(context, "workers.read_all")) {
     return (

@@ -5,7 +5,7 @@ export default function WorkerDocumentsPage() {
   return (
     <div className="grid gap-3">
       <BackLink href="/workers" />
-      <AttentionRegister kind="document" />
+      <AttentionRegister />
     </div>
   )
 }

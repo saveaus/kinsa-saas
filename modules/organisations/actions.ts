@@ -151,7 +151,7 @@ export async function updateOrganisationIdentityAction(
     registration: Boolean(registration),
   })
   refreshWorkspace()
-  return { message: "Business details saved. They will appear on training certificates." }
+  return { message: "Business details saved." }
 }
 
 export async function updateRegistrationGroupsAction(

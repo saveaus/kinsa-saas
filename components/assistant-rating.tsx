@@ -46,6 +46,9 @@ export function AssistantRatingCard({
     try {
       const response = await onConfirm()
       if (response.error) setError(response.error)
+    } catch (caught) {
+      console.error(caught)
+      setError("The rating could not be saved. Try again.")
     } finally {
       setBusy(false)
     }

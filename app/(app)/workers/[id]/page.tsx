@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { ProfileLogs } from "@/components/profile-logs"
 import { WorkerRecord } from "@/components/worker-record"
 import { formatRelativeDay } from "@/lib/format-date"
+import { today, zonedDate } from "@/lib/today"
 import { personName } from "@/lib/person-name"
 import { expiryLabel } from "@/lib/expiry-label"
 import { can, requirePermission, requireTenant } from "@/lib/tenant"
@@ -63,15 +64,11 @@ export default async function WorkerDetailPage({
       canLogs ? listCustomLogs(context) : Promise.resolve([]),
     ])
 
-  const scoped = attachRequirementRoles([], types, requirementMaps)
-
   const compliance = computeWorkerCompliance({
     workerId: worker.id,
     workerRoles: asStaffRoles(worker.staff_roles),
-    types: scoped.types,
+    types: attachRequirementRoles(types, requirementMaps),
     documents,
-    courses: [],
-    enrolments: [],
     lapsingWindowDays,
   })
 
@@ -111,8 +108,8 @@ export default async function WorkerDetailPage({
         percent: compliance.percent,
       }}
       activity={activity.map((event) => {
-        const date = parseISO(event.created_at)
-        const days = differenceInCalendarDays(new Date(), date)
+        const date = zonedDate(parseISO(event.created_at))
+        const days = differenceInCalendarDays(today(), date)
         return {
           id: event.id,
           year: format(date, "yyyy"),

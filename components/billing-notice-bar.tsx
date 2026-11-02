@@ -34,7 +34,7 @@ export function BillingNoticeBar({ notice }: { notice: BillingNotice }) {
         aria-label="Expand"
         className={
           notice.action
-            ? "flex h-5 w-full shrink-0 items-center justify-end bg-[#f5a524] pr-2 text-[#24180a]"
+            ? "flex h-5 w-full shrink-0 items-center justify-end bg-[#f1eeeb] pr-2 text-[#2a2724]"
             : "flex h-5 w-full shrink-0 items-center justify-end border-b pr-2"
         }
       >
@@ -47,7 +47,7 @@ export function BillingNoticeBar({ notice }: { notice: BillingNotice }) {
     <div
       className={
         notice.action
-          ? "flex shrink-0 items-center gap-3 bg-[#f5a524] px-4 py-2 text-sm text-[#24180a]"
+          ? "flex shrink-0 items-center gap-3 bg-[#f1eeeb] px-4 py-2 text-sm text-[#2a2724]"
           : "flex shrink-0 items-center gap-3 border-b px-4 py-2 text-sm"
       }
     >

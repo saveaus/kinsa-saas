@@ -1,8 +1,8 @@
-import { format, startOfDay } from "date-fns"
-
 import { personName } from "@/lib/person-name"
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { can, type TenantContext } from "@/lib/tenant"
+import { todayOn as appTodayOn } from "@/lib/today"
 import {
   packReadiness,
   scoreAuditPack,
@@ -57,18 +57,30 @@ export async function loadAuditPack(
   if (governance) {
     const supabase = await createServerSupabase()
     const [policyResult, acknowledgementResult, incidentResult] = await Promise.all([
-      supabase
-        .from("policies")
-        .select("id, name, standard_code, review_on, status")
-        .eq("organisation_id", context.organisationId),
-      supabase
-        .from("policy_acknowledgements")
-        .select("policy_id")
-        .eq("organisation_id", context.organisationId),
-      supabase
-        .from("incidents")
-        .select("id, kind, summary, status")
-        .eq("organisation_id", context.organisationId),
+      fetchAll((from, to) =>
+        supabase
+          .from("policies")
+          .select("id, name, standard_code, review_on, status, compliance_flagged")
+          .eq("organisation_id", context.organisationId)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("policy_acknowledgements")
+          .select("id, policy_id")
+          .eq("organisation_id", context.organisationId)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("incidents")
+          .select("id, kind, summary, status")
+          .eq("organisation_id", context.organisationId)
+          .order("id")
+          .range(from, to)
+      ),
     ])
 
     if (policyResult.error) throw new Error(policyResult.error.message)
@@ -87,6 +99,7 @@ export async function loadAuditPack(
       reviewOn: policy.review_on,
       status: policy.status as PolicyRecordStatus,
       acknowledged: acknowledged.has(policy.id),
+      flagged: policy.compliance_flagged,
     }))
     incidents = (incidentResult.data ?? []).map((incident) => ({
       id: incident.id,
@@ -110,12 +123,16 @@ export async function loadAuditPack(
       })
     )
     if (tagged.size > 0) {
-      const { data: filed, error: filedError } = await supabase
-        .from("log_entries")
-        .select("id, summary, register_id")
-        .eq("organisation_id", context.organisationId)
-        .eq("status", "accepted")
-        .in("register_id", [...tagged.keys()])
+      const { data: filed, error: filedError } = await fetchAll((from, to) =>
+        supabase
+          .from("log_entries")
+          .select("id, summary, register_id")
+          .eq("organisation_id", context.organisationId)
+          .eq("status", "accepted")
+          .in("register_id", [...tagged.keys()])
+          .order("id")
+          .range(from, to)
+      )
       if (filedError) throw new Error(filedError.message)
       logEvidence = (filed ?? []).flatMap((entry) => {
         const tag = tagged.get(entry.register_id)
@@ -131,13 +148,19 @@ export async function loadAuditPack(
       })
     }
 
-    const todayOn = format(startOfDay(new Date()), "yyyy-MM-dd")
-    const { data: dueRows, error: dueError } = await supabase
-      .from("log_entries")
-      .select("id, summary, due_on, register_id")
-      .eq("organisation_id", context.organisationId)
-      .not("due_on", "is", null)
-      .lte("due_on", todayOn)
+    const todayOn = appTodayOn()
+    const { data: dueRows, error: dueError } = await fetchAll((from, to) =>
+      supabase
+        .from("log_entries")
+        .select("id, summary, due_on, register_id")
+        .eq("organisation_id", context.organisationId)
+        .eq("status", "accepted")
+        .not("due_on", "is", null)
+        .is("completed_at", null)
+        .lte("due_on", todayOn)
+        .order("id")
+        .range(from, to)
+    )
     if (dueError) throw new Error(dueError.message)
     logDue = (dueRows ?? []).flatMap((entry) =>
       entry.due_on
@@ -171,5 +194,8 @@ export async function loadAuditPack(
     lapsingWindowDays,
   })
 
-  return { items, readiness: packReadiness(items) }
+  // Without settings.manage only worker credentials load, so the figure is
+  // theirs alone and must not be read as the organisation's readiness.
+  const scope = governance ? ("organisation" as const) : ("credentials" as const)
+  return { items, readiness: packReadiness(items), scope }
 }

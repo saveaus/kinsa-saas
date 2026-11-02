@@ -25,6 +25,8 @@ export function ActionForm({
   id,
   bare = false,
   onPendingChange,
+  prepareForm,
+  hardNavigate = false,
 }: {
   action: (state: State, formData: FormData) => Promise<State>
   children?: React.ReactNode
@@ -40,6 +42,8 @@ export function ActionForm({
   id?: string
   bare?: boolean
   onPendingChange?: (pending: boolean) => void
+  prepareForm?: (form: HTMLFormElement) => void
+  hardNavigate?: boolean
 }) {
   const router = useRouter()
   const [state, formAction, pending] = useActionState(action, {})
@@ -57,16 +61,20 @@ export function ActionForm({
     if (submitted.current && state.message && !state.error) {
       submitted.current = false
       toast.add({ title: state.message, type: "success", timeout: 4000 })
-      if (state.href) router.push(state.href)
+      if (state.href) {
+        if (hardNavigate) window.location.assign(state.href)
+        else router.push(state.href)
+      }
       onSuccess?.()
     }
-  }, [pending, state.message, state.error, state.href, onSuccess, router])
+  }, [pending, state.message, state.error, state.href, onSuccess, router, hardNavigate])
 
   return (
     <form
       id={id}
       action={formAction}
       className={bare ? className : cn("grid gap-3", className)}
+      onSubmit={(event) => prepareForm?.(event.currentTarget)}
     >
       {state.error ? (
         <Alert variant="destructive">

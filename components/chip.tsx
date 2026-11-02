@@ -3,7 +3,7 @@ import { cn } from "cn"
 const tones = {
   green: "bg-[#E7F6D9] text-[#3C7A28] dark:bg-[#1C3320] dark:text-[#A8D99A]",
   yellow: "bg-[#FBF3C4] text-[#8A6D12] dark:bg-[#3A3114] dark:text-[#E4C56A]",
-  orange: "bg-[#FDE8D0] text-[#A85A14] dark:bg-[#3A2614] dark:text-[#F0B07A]",
+  orange: "bg-[#F1EEEB] text-[#5E5A56] dark:bg-[#32302E] dark:text-[#D4CFC9]",
   red: "bg-[#FDE2E1] text-[#B42318] dark:bg-[#3A1C1A] dark:text-[#F0A39C]",
   blue: "bg-primary/10 text-primary dark:bg-primary/15",
   gray: "bg-[#F1F2F4] text-[#5E6570] dark:bg-[#32363C] dark:text-[#C8CDD4]",

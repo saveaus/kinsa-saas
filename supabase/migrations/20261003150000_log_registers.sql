@@ -7,7 +7,7 @@ create table public.log_registers (
   name text not null check (char_length(trim(name)) between 1 and 60),
   slug text not null check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   visible boolean not null default true,
-  scope text not null check (scope in ('global', 'person')),
+  scope text not null constraint log_registers_scope_values check (scope in ('global', 'person')),
   subject text not null check (subject in ('organisation', 'participant', 'worker')),
   participant_id uuid references public.participants (id) on delete restrict,
   worker_id uuid references public.workers (id) on delete restrict,

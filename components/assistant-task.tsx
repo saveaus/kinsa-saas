@@ -28,6 +28,9 @@ export function AssistantTaskCard({
     try {
       const response = await onConfirm(task)
       if (response.error) setError(response.error)
+    } catch (caught) {
+      console.error(caught)
+      setError("That change could not be saved. Try again.")
     } finally {
       setBusy(false)
     }

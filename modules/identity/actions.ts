@@ -1,6 +1,7 @@
 "use server"
 
-import { headers } from "next/headers"
+import { revalidatePath } from "next/cache"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { isValidAbn, parseAbn } from "@/lib/abn"
@@ -13,7 +14,9 @@ import { sendPasswordReset, sendSignupConfirmation } from "@/modules/identity/co
 import { hashToken } from "@/modules/identity/token"
 import { peekInvite } from "@/modules/identity/queries"
 
-export type AuthActionState = { error?: string; message?: string }
+export type AuthActionState = { error?: string; message?: string; href?: string }
+
+const welcomeCookie = "kinsa-welcome"
 
 async function clientIp() {
   const headerStore = await headers()
@@ -116,8 +119,17 @@ export async function updatePasswordAction(
 const LOGO_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/pjpeg": "jpg",
   "image/gif": "gif",
   "image/webp": "webp",
+}
+
+const LOGO_CONTENT_TYPE: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
 }
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -159,15 +171,8 @@ export async function createOrganisationAction(
     return { error: "Enter the NDIS registration number, or leave it blank." }
   }
 
-  const logo = formData.get("logo")
-  let logoFile: File | null = null
-  if (logo instanceof File && logo.size > 0) {
-    if (logo.size > MAX_LOGO_BYTES) return { error: "Logo must be under 2 MB." }
-    if (!LOGO_EXTENSIONS[logo.type]) {
-      return { error: "Use a PNG, JPG, GIF, or WebP image." }
-    }
-    logoFile = logo
-  }
+  const logo = readLogo(formData)
+  if ("error" in logo) return logo
 
   const supabase = await createServerSupabase()
   const { data: existing, error: membershipError } = await supabase
@@ -200,13 +205,15 @@ export async function createOrganisationAction(
     .eq("id", organisationId)
   if (updateError) return { error: updateError.message }
 
-  if (logoFile) {
-    const extension = LOGO_EXTENSIONS[logoFile.type]
+  if (logo.file) {
+    const extension = logoExtension(logo.file)
+    if (!extension) return { error: "Use a PNG, JPG, GIF, or WebP image." }
     const path = `${organisationId}/logo.${extension}`
-    const bytes = new Uint8Array(await logoFile.arrayBuffer())
-    const { error: uploadError } = await supabase.storage
-      .from("organisation-logos")
-      .upload(path, bytes, { contentType: logoFile.type, upsert: true })
+    const bytes = new Uint8Array(await logo.file.arrayBuffer())
+    const { error: uploadError } = await supabase.storage.from("organisation-logos").upload(path, bytes, {
+      contentType: LOGO_CONTENT_TYPE[extension],
+      upsert: true,
+    })
     if (uploadError) return { error: uploadError.message }
 
     const { error: logoError } = await supabase
@@ -220,10 +227,32 @@ export async function createOrganisationAction(
     abn: Boolean(abn),
     registration: Boolean(registration),
     registrationGroups: registrationGroups.length,
-    logo: Boolean(logoFile),
+    logo: Boolean(logo.file),
   })
 
-  redirect("/dashboard")
+  revalidatePath("/", "layout")
+  const jar = await cookies()
+  jar.set(welcomeCookie, "1", { path: "/", maxAge: 120, httpOnly: true, sameSite: "lax" })
+  return { message: "Organisation created.", href: "/dashboard?welcome=1" }
+}
+
+function readLogo(formData: FormData): { file: File | null } | { error: string } {
+  const value = formData.get("logo")
+  if (value == null || typeof value === "string" || value.size === 0) return { file: null }
+  if (value.size > MAX_LOGO_BYTES) return { error: "Logo must be under 2 MB." }
+  if (!logoExtension(value)) return { error: "Use a PNG, JPG, GIF, or WebP image." }
+  return { file: value }
+}
+
+function logoExtension(file: File) {
+  const fromType = LOGO_EXTENSIONS[file.type]
+  if (fromType) return fromType
+  const name = (file.name ?? "").toLowerCase()
+  if (name.endsWith(".png")) return "png"
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "jpg"
+  if (name.endsWith(".gif")) return "gif"
+  if (name.endsWith(".webp")) return "webp"
+  return null
 }
 
 export async function acceptInviteAction(

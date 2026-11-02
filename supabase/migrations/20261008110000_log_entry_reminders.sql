@@ -20,7 +20,7 @@ begin
   where nsp.nspname = 'public'
     and rel.relname = 'log_registers'
     and con.contype = 'c'
-    and pg_get_constraintdef(con.oid) ilike '%char_length(name)%';
+    and pg_get_constraintdef(con.oid) ilike '%char_length(%name)%';
   if constraint_name is not null then
     execute format(
       'alter table public.log_registers drop constraint %I',

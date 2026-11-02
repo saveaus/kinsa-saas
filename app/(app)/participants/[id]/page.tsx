@@ -1,34 +1,27 @@
-import Link from "next/link"
+import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { notFound } from "next/navigation"
 
-import { AddIncidentDialog } from "@/components/add-incident-dialog"
-import { AddParticipantRecordDialog } from "@/components/add-participant-record-dialog"
-import { ActionForm } from "@/components/action-form"
-import { BackLink } from "@/components/back-link"
 import type { ChipTone } from "@/components/chip"
-import { IncidentFileButton } from "@/components/incident-actions"
-import { ParticipantActiveChip } from "@/components/participant-active-chip"
-import { ParticipantFileButton } from "@/components/participant-record-actions"
-import { RecordStatusMenu } from "@/components/record-status-menu"
-import { formatDate } from "@/lib/format-date"
+import { ParticipantRecord, type ParticipantEntryRow } from "@/components/participant-record"
+import { registeredWall } from "@/components/registered-wall"
+import { formatDate, formatRelativeDay } from "@/lib/format-date"
+import { today, zonedDate } from "@/lib/today"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
+import { listParticipantActivity } from "@/modules/audit/queries"
+import { auditSentence } from "@/modules/audit/sentence"
 import { listParticipantIncidents } from "@/modules/incidents/queries"
-import { ProfileLogs } from "@/components/profile-logs"
 import {
-  listCustomLogs,
-  listLogRegisters,
-  listPersonLogEntries,
-} from "@/modules/logs/queries"
-import { logOnPerson, logShown } from "@/modules/logs/standing"
-import {
-  incidentListPath,
-  incidentRegisterTitle,
+  incidentKindLabel,
   incidentStanding,
   incidentStandingLabel,
   type IncidentKind,
 } from "@/modules/incidents/standing"
-import { deleteParticipantAction } from "@/modules/participants/actions"
+import { listLogRegisters, listPersonLogEntries } from "@/modules/logs/queries"
+import { logFileHref, logShown } from "@/modules/logs/standing"
+import {
+  deleteParticipantAction,
+  updateParticipantAction,
+} from "@/modules/participants/actions"
 import {
   getParticipant,
   listParticipantFiles,
@@ -40,6 +33,12 @@ import {
   type ParticipantDocumentStanding,
   type ParticipantRecordKind,
 } from "@/modules/participants/standing"
+import { listParticipantSupportPlanChecks, listAcceptedSupportPlans } from "@/modules/support-plan-checks/queries"
+import {
+  supportPlanCheckStanding,
+  supportPlanCheckStandingLabel,
+} from "@/modules/support-plan-checks/standing"
+
 const standingTone: Record<ParticipantDocumentStanding, ChipTone> = {
   missing: "gray",
   draft: "gray",
@@ -53,6 +52,8 @@ const participantLogKinds: IncidentKind[] = [
   "risk",
   "restrictive_practice",
 ]
+
+const recordKinds: ParticipantRecordKind[] = ["service_agreement", "support_plan"]
 
 function fileDates(file: ParticipantFile) {
   switch (file.kind) {
@@ -79,202 +80,170 @@ function fileStanding(file: ParticipantFile, status = file.status) {
   return standing === "missing" ? "draft" : standing
 }
 
-function fileStandingLabel(file: ParticipantFile) {
-  return documentStandingLabel(file.kind, fileStanding(file))
-}
-
-function FileSection({
-  participantId,
-  kind,
-  title,
-  files,
-}: {
-  participantId: string
-  kind: ParticipantRecordKind
-  title: string
-  files: ParticipantFile[]
-}) {
-  const matching = files.filter((file) => file.kind === kind)
-
-  return (
-    <section className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-3 px-3 py-2">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <AddParticipantRecordDialog participantId={participantId} kind={kind} />
-      </div>
-      {matching.length === 0 ? (
-        <p className="border-t px-3 py-3 text-sm text-muted-foreground">
-          Nothing attached yet.
-        </p>
-      ) : (
-        matching.map((file) => {
-          const standing = fileStanding(file)
-          const accepted = fileStanding(file, "accepted")
-          return (
-            <div
-              key={file.id}
-              className="flex flex-wrap items-center gap-3 border-t px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{file.original_filename}</p>
-                <p className="text-xs text-muted-foreground">
-                  {fileDates(file)}
-                </p>
-              </div>
-              <RecordStatusMenu
-                draft={file.status === "draft"}
-                label={fileStandingLabel(file)}
-                tone={standingTone[standing]}
-                acceptedLabel={documentStandingLabel(file.kind, accepted)}
-                acceptedTone={standingTone[accepted]}
-                target={{ kind: "participantRecord", id: file.id }}
-              />
-              <ParticipantFileButton
-                participantId={participantId}
-                recordId={file.id}
-                filename={file.original_filename}
-                mimeType={file.mime_type}
-              />
-            </div>
-          )
-        })
-      )}
-    </section>
-  )
-}
-
 export default async function ParticipantPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ activityPage?: string }>
 }) {
   const { id } = await params
+  const query = await searchParams
+  const activityPage = Math.max(1, Number(query.activityPage) || 1)
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const participant = await getParticipant(context, id)
   if (!participant) notFound()
-  const [files, incidents, logs, entries, customLogs] = await Promise.all([
+
+  const [files, incidents, logs, entries, checks, plans] = await Promise.all([
     listParticipantFiles(context, id),
     listParticipantIncidents(context, id),
     listLogRegisters(context),
     listPersonLogEntries(context, { participantId: id }),
-    listCustomLogs(context),
+    listParticipantSupportPlanChecks(context, id),
+    listAcceptedSupportPlans(context),
   ])
+  const { events: activity, hasMore: activityHasMore } = await listParticipantActivity(
+    context,
+    id,
+    {
+      recordIds: files.map((file) => file.id),
+      incidentIds: incidents.map((incident) => incident.id),
+      entryIds: entries.map((entry) => entry.id),
+      checkIds: checks.map((check) => check.id),
+    },
+    activityPage
+  )
+
+  const dated = files.map((file) => ({
+    kind: file.kind,
+    status: file.status,
+    endsOn: file.ends_on,
+    reviewOn: file.review_on,
+  }))
+  const current = recordKinds.filter((kind) => documentStanding(kind, dated) === "current").length
   const accepted =
     files.some((file) => file.status === "accepted") ||
     incidents.some((incident) => incident.status === "accepted") ||
-    entries.some((entry) => entry.status === "accepted")
+    entries.some((entry) => entry.status === "accepted") ||
+    checks.some((check) => check.status === "accepted")
+  const registerNames = new Map(logs.map((log) => [log.id, log.name]))
+  const activityBase = `/participants/${participant.id}`
+  const activityHref = (page: number) =>
+    page <= 1 ? activityBase : `${activityBase}?activityPage=${page}`
+
+  const recordRows: ParticipantEntryRow[] = [
+    ...incidents.map((incident) => {
+      const standing = incidentStanding(incident.status)
+      const tone: ChipTone = standing === "recorded" ? "green" : "gray"
+      return {
+        id: incident.id,
+        title: incident.summary,
+        detail: `${incidentKindLabel(incident.kind)} · ${formatDate(incident.occurred_on)}`,
+        draft: incident.status === "draft",
+        label: incidentStandingLabel(standing),
+        tone,
+        acceptedLabel: incidentStandingLabel("recorded"),
+        acceptedTone: "green" as const,
+        target: { kind: "incident" as const, id: incident.id },
+        view: {
+          kind: "incident" as const,
+          incidentKind: incident.kind,
+          summary: incident.summary,
+          filename: incident.original_filename,
+          mimeType: incident.mime_type,
+        },
+      }
+    }),
+    ...checks.map((check) => {
+      const standing = supportPlanCheckStanding(check.status)
+      const tone: ChipTone = standing === "recorded" ? "green" : "gray"
+      return {
+        id: check.id,
+        title: check.note,
+        detail: `Support plan check · ${formatDate(check.checked_on)}`,
+        draft: check.status === "draft",
+        label: supportPlanCheckStandingLabel(standing),
+        tone,
+        acceptedLabel: supportPlanCheckStandingLabel("recorded"),
+        acceptedTone: "green" as const,
+        target: { kind: "supportPlanCheck" as const, id: check.id },
+        view: {
+          kind: "link" as const,
+          href: `/participants/${participant.id}/files/${check.plan_id}`,
+        },
+      }
+    }),
+    ...entries.map((entry) => {
+      const draft = entry.status !== "accepted"
+      return {
+        id: entry.id,
+        title: entry.summary,
+        detail: `${registerNames.get(entry.register_id) ?? "Log"} · ${formatDate(entry.occurred_on)}`,
+        draft,
+        label: draft ? "Draft" : "Recorded",
+        tone: (draft ? "gray" : "green") as ChipTone,
+        acceptedLabel: "Recorded",
+        acceptedTone: "green" as const,
+        target: { kind: "log" as const, id: entry.id },
+        view: { kind: "link" as const, href: logFileHref(entry.register_id) },
+      }
+    }),
+  ]
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-1">
-        <BackLink href="/participants" />
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-heading text-lg">{participant.name}</h1>
-          <ParticipantActiveChip
-            participantId={participant.id}
-            active={participant.active}
-          />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          NDIS {participant.ndis_number}
-        </p>
-      </div>
-      <ProfileLogs
-        logs={customLogs.filter((log) =>
-          logOnPerson(log, { participantId: participant.id })
-        )}
-      />
-      {accepted ? null : (
-        <div className="flex flex-wrap gap-2">
-          <ActionForm
-            action={deleteParticipantAction.bind(null, participant.id)}
-            submitLabel="Remove participant"
-            pendingLabel="Removing..."
-            submitVariant="outline"
-            submitSize="sm"
-            className="w-fit"
-          />
-        </div>
-      )}
-      <FileSection
-        participantId={participant.id}
-        kind="service_agreement"
-        title="Service agreement"
-        files={files}
-      />
-      <FileSection
-        participantId={participant.id}
-        kind="support_plan"
-        title="Support plan"
-        files={files}
-      />
-      {participantLogKinds
-        .filter((kind) => logShown(logs, kind))
-        .map((kind) => {
-          const matching = incidents.filter(
-            (incident) => incident.kind === kind
-          )
-          const title = incidentRegisterTitle(kind)
-          return (
-            <section
-              key={kind}
-              className="overflow-hidden rounded-lg border bg-card"
-            >
-              <div className="flex items-center justify-between gap-3 px-3 py-2">
-                <div className="flex items-baseline gap-2">
-                  <h2 className="text-sm font-medium">{title}</h2>
-                  <Link
-                    href={incidentListPath(kind)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Open register
-                  </Link>
-                </div>
-                <AddIncidentDialog kind={kind} participantId={participant.id} />
-              </div>
-              {matching.length === 0 ? (
-                <p className="border-t px-3 py-3 text-sm text-muted-foreground">
-                  Nothing recorded yet.
-                </p>
-              ) : (
-                matching.map((incident) => {
-                  const standing = incidentStanding(incident.status)
-                  const tone = standing === "recorded" ? "green" : "gray"
-                  return (
-                    <div
-                      key={incident.id}
-                      className="flex flex-wrap items-center gap-3 border-t px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{incident.summary}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(incident.occurred_on)}
-                        </p>
-                      </div>
-                      <RecordStatusMenu
-                        draft={incident.status === "draft"}
-                        label={incidentStandingLabel(standing)}
-                        tone={tone}
-                        acceptedLabel={incidentStandingLabel("recorded")}
-                        acceptedTone="green"
-                        target={{ kind: "incident", id: incident.id }}
-                      />
-                      <IncidentFileButton
-                        incidentId={incident.id}
-                        kind={incident.kind}
-                        summary={incident.summary}
-                        filename={incident.original_filename}
-                        mimeType={incident.mime_type}
-                      />
-                    </div>
-                  )
-                })
-              )}
-            </section>
-          )
-        })}
-    </div>
+    <ParticipantRecord
+      id={participant.id}
+      name={participant.name}
+      ndisNumber={participant.ndis_number}
+      active={participant.active}
+      canDelete={!accepted}
+      score={`${current}/2`}
+      percent={Math.round((current / 2) * 100)}
+      activity={activity.map((event) => {
+        const date = zonedDate(parseISO(event.created_at))
+        const days = differenceInCalendarDays(today(), date)
+        return {
+          id: event.id,
+          year: format(date, "yyyy"),
+          period: days < 7 ? "This week" : format(date, "MMMM"),
+          sentence: `${event.actorName} ${auditSentence(event.action, event.target_type, "org", event.metadata)}`,
+          when: formatRelativeDay(event.created_at),
+        }
+      })}
+      activityNewerHref={activityPage > 1 ? activityHref(activityPage - 1) : null}
+      activityOlderHref={activityHasMore ? activityHref(activityPage + 1) : null}
+      documents={files.map((file) => {
+        const standing = fileStanding(file)
+        const acceptedStanding = fileStanding(file, "accepted")
+        return {
+          id: file.id,
+          filename: file.original_filename,
+          mimeType: file.mime_type,
+          detail: fileDates(file),
+          draft: file.status === "draft",
+          label: documentStandingLabel(file.kind, standing),
+          tone: standingTone[standing],
+          acceptedLabel: documentStandingLabel(file.kind, acceptedStanding),
+          acceptedTone: standingTone[acceptedStanding],
+        }
+      })}
+      entries={recordRows}
+      registers={participantLogKinds.filter((kind) => logShown(logs, kind)).map((kind) => ({
+        kind,
+        label: incidentKindLabel(kind),
+      }))}
+      plans={plans
+        .filter((plan) => plan.participant_id === participant.id)
+        .map((plan) => ({
+          id: plan.id,
+          participantId: plan.participant_id,
+          label: plan.original_filename,
+        }))}
+      updateAction={updateParticipantAction.bind(null, participant.id)}
+      deleteAction={deleteParticipantAction.bind(null, participant.id)}
+    />
   )
 }

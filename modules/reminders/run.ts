@@ -3,36 +3,84 @@ import { addDays, format, parseISO, startOfDay } from "date-fns"
 import { appUrl } from "@/lib/env"
 import { personName } from "@/lib/person-name"
 import { createAdminSupabase } from "@/lib/supabase/admin"
+import { fetchAll } from "@/lib/supabase/fetch-all"
+import { todayOn as appTodayOn } from "@/lib/today"
+import {
+  allowsRegistered,
+  isBillingPlan,
+  isBillingStatus,
+} from "@/modules/billing/access"
+import { stripeConfigured } from "@/modules/billing/stripe"
 import type { ReminderCategory } from "@/modules/reminders/categories"
 import { renderTemplate, sendReminderEmail } from "@/modules/reminders/email"
-import { courseExpiryOn, isReminderDue } from "@/modules/reminders/matching"
+import {
+  hasRenewal,
+  isReminderDue,
+} from "@/modules/reminders/matching"
 
 type RuleRow = {
   id: string
   organisation_id: string
   category: ReminderCategory
+  document_type_version_id: string | null
+  document_id: string | null
   days_before: number
   subject: string
   body_template: string
-  organisations: { name: string } | null
+  organisations: ({ name: string } & BillingRow) | null
 }
 
-type WorkerName = { first_name: string; last_name: string; email: string }
+type BillingRow = {
+  billing_plan: string | null
+  billing_status: string | null
+  trial_ends_at: string | null
+}
+
+// Follow-ups belong to the Registered plan, so closed organisations are skipped.
+function followUpsOpen(row: BillingRow | null, now: Date) {
+  if (!row) return false
+  return allowsRegistered(
+    {
+      plan: isBillingPlan(row.billing_plan) ? row.billing_plan : null,
+      status: isBillingStatus(row.billing_status) ? row.billing_status : null,
+      trialEndsAt: row.trial_ends_at,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+    },
+    now,
+    stripeConfigured()
+  )
+}
+
+type WorkerName = {
+  first_name: string
+  last_name: string
+  email: string
+  employment_status: string
+  deleted_at: string | null
+}
 
 export async function runReminderSweep() {
   const supabase = createAdminSupabase()
-  const today = new Date()
-  const todayOn = format(startOfDay(today), "yyyy-MM-dd")
+  const todayOn = appTodayOn()
+  const today = parseISO(todayOn)
 
-  const { data: rules, error: rulesError } = await supabase
-    .from("reminder_rules")
-    .select("*, organisations(name)")
+  const { data: rules, error: rulesError } = await fetchAll((from, to) =>
+    supabase
+      .from("reminder_rules")
+      .select(
+        "*, organisations(name, billing_plan, billing_status, trial_ends_at)"
+      )
+      .order("id")
+      .range(from, to)
+  )
   if (rulesError) throw new Error(rulesError.message)
 
   let sent = 0
   let skipped = 0
 
   for (const rule of (rules ?? []) as unknown as RuleRow[]) {
+    if (!followUpsOpen(rule.organisations, new Date())) continue
     const untilOn = format(
       addDays(startOfDay(today), rule.days_before),
       "yyyy-MM-dd"
@@ -40,21 +88,49 @@ export async function runReminderSweep() {
     const organisationName = rule.organisations?.name ?? "your organisation"
     switch (rule.category) {
       case "documents": {
-        const { data: documents, error } = await supabase
+        let request = supabase
           .from("documents")
           .select(
-            "*, workers(first_name, last_name, email), document_type_versions(name)"
+            "*, workers(first_name, last_name, email, employment_status, deleted_at), document_type_versions(name)"
           )
           .eq("organisation_id", rule.organisation_id)
           .gte("expires_on", todayOn)
           .lte("expires_on", untilOn)
           .in("approval_status", ["approved", "pending"])
+        if (rule.document_id) {
+          request = request.eq("id", rule.document_id)
+        } else if (rule.document_type_version_id) {
+          request = request.eq(
+            "document_type_version_id",
+            rule.document_type_version_id
+          )
+        }
+        const { data: documents, error } = await request
         if (error) throw new Error(error.message)
+        const workerIds = [
+          ...new Set((documents ?? []).map((document) => document.worker_id)),
+        ]
+        const { data: renewals, error: renewalError } =
+          workerIds.length === 0
+            ? { data: [], error: null }
+            : await supabase
+                .from("documents")
+                .select("worker_id, document_type_version_id, expires_on")
+                .eq("organisation_id", rule.organisation_id)
+                .in("worker_id", workerIds)
+                .gt("expires_on", todayOn)
+                .in("approval_status", ["approved", "pending"])
+        if (renewalError) throw new Error(renewalError.message)
         for (const document of documents ?? []) {
           if (
             !document.expires_on ||
-            !isReminderDue(document.expires_on, today, rule.days_before)
+            !isReminderDue(document.expires_on, today, rule.days_before) ||
+            hasRenewal(document, renewals ?? [])
           ) {
+            continue
+          }
+          const worker = document.workers as unknown as WorkerName | null
+          if (worker?.deleted_at || worker?.employment_status !== "active") {
             continue
           }
           const outcome = await sendFollowUp({
@@ -63,7 +139,7 @@ export async function runReminderSweep() {
             dueOn: document.expires_on,
             organisationName,
             workerId: document.worker_id,
-            worker: document.workers as unknown as WorkerName | null,
+            worker,
             itemName:
               (
                 document.document_type_versions as unknown as {
@@ -72,54 +148,8 @@ export async function runReminderSweep() {
               )?.name ?? "document",
             expiryDate: format(parseISO(document.expires_on), "d MMM yyyy"),
             documentId: document.id,
-            enrolmentId: null,
             targetType: "document",
             targetId: document.id,
-          })
-          if (outcome === "sent") sent += 1
-          else skipped += 1
-        }
-        break
-      }
-      case "courses": {
-        const { data: enrolments, error } = await supabase
-          .from("enrolments")
-          .select(
-            "id, worker_id, completed_at, workers(first_name, last_name, email), courses(title, renewal_months)"
-          )
-          .eq("organisation_id", rule.organisation_id)
-          .eq("status", "completed")
-          .not("completed_at", "is", null)
-        if (error) throw new Error(error.message)
-        for (const enrolment of enrolments ?? []) {
-          const course = enrolment.courses as unknown as {
-            title: string
-            renewal_months: number | null
-          } | null
-          if (!enrolment.completed_at || !course?.renewal_months) continue
-          const expiresOn = courseExpiryOn(
-            enrolment.completed_at,
-            course.renewal_months
-          )
-          if (
-            !expiresOn ||
-            !isReminderDue(expiresOn, today, rule.days_before)
-          ) {
-            continue
-          }
-          const outcome = await sendFollowUp({
-            supabase,
-            rule,
-            dueOn: expiresOn,
-            organisationName,
-            workerId: enrolment.worker_id,
-            worker: enrolment.workers as unknown as WorkerName | null,
-            itemName: course.title,
-            expiryDate: format(parseISO(expiresOn), "d MMM yyyy"),
-            documentId: null,
-            enrolmentId: enrolment.id,
-            targetType: "enrolment",
-            targetId: enrolment.id,
           })
           if (outcome === "sent") sent += 1
           else skipped += 1
@@ -146,13 +176,23 @@ async function notifyDueLogs(
     .select("id, organisation_id, summary, due_on, register_id")
     .eq("remind", true)
     .is("reminded_at", null)
+    .is("completed_at", null)
     .lte("due_on", todayOn)
     .eq("status", "accepted")
   if (error) throw new Error(error.message)
-  const rows = entries ?? []
+  if (!entries || entries.length === 0) return 0
+
+  const { data: organisations, error: organisationError } = await supabase
+    .from("organisations")
+    .select("id, billing_plan, billing_status, trial_ends_at")
+    .in("id", [...new Set(entries.map((row) => row.organisation_id))])
+  if (organisationError) throw new Error(organisationError.message)
+  const orgIds = (organisations ?? [])
+    .filter((organisation) => followUpsOpen(organisation, new Date()))
+    .map((organisation) => organisation.id)
+  const rows = entries.filter((row) => orgIds.includes(row.organisation_id))
   if (rows.length === 0) return 0
 
-  const orgIds = [...new Set(rows.map((row) => row.organisation_id))]
   const { data: members, error: memberError } = await supabase
     .from("memberships")
     .select("organisation_id, user_id")
@@ -210,8 +250,7 @@ async function sendFollowUp(input: {
   worker: WorkerName | null
   itemName: string
   expiryDate: string
-  documentId: string | null
-  enrolmentId: string | null
+  documentId: string
   targetType: string
   targetId: string
 }) {
@@ -223,7 +262,6 @@ async function sendFollowUp(input: {
       organisation_id: input.rule.organisation_id,
       reminder_rule_id: input.rule.id,
       document_id: input.documentId,
-      enrolment_id: input.enrolmentId,
       worker_id: input.workerId,
       due_on: input.dueOn,
     })
@@ -238,7 +276,6 @@ async function sendFollowUp(input: {
     worker_name: personName(input.worker.first_name, input.worker.last_name),
     item_name: input.itemName,
     document_type: input.itemName,
-    course_name: input.itemName,
     organisation_name: input.organisationName,
     expiry_date: input.expiryDate,
     login_url: `${appUrl()}/login`,

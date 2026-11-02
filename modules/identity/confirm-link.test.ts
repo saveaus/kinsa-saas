@@ -25,3 +25,10 @@ test("only the auth email types are accepted", () => {
   assert.equal(isAuthEmailType("signup "), false)
   assert.equal(isAuthEmailType(null), false)
 })
+
+test("safeNext stays on this site", () => {
+  assert.equal(safeNext("/dashboard?tab=a"), "/dashboard?tab=a")
+  for (const value of ["/\t/evil.com", "/\n/evil.com", "//evil.com", "/\\evil.com", "https://evil.com", null]) {
+    assert.equal(safeNext(value), "/onboarding")
+  }
+})

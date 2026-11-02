@@ -32,11 +32,25 @@ export async function assistantTokensUsed(organisationId: string) {
   return countedAssistantTokens({ billing, ...usage })
 }
 
+// Staff can only read their own worker row, so counting seats under their
+// session would cap the whole organisation at one seat for them.
+async function countBilledWorkers(organisationId: string) {
+  if (!hasAdminClient()) return countActiveWorkers(organisationId)
+  const { count, error } = await createAdminSupabase()
+    .from("workers")
+    .select("id", { count: "exact", head: true })
+    .eq("organisation_id", organisationId)
+    .eq("employment_status", "active")
+    .is("deleted_at", null)
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
 export async function loadAssistantAllowance(organisationId: string) {
   const [billing, usage, workers] = await Promise.all([
     getOrganisationBilling(organisationId),
     readAssistantUsage(organisationId),
-    countActiveWorkers(organisationId),
+    countBilledWorkers(organisationId),
   ])
 
   return assistantAllowance({
@@ -77,4 +91,19 @@ export async function claimAssistantTrialTokens(organisationId: string, tokens: 
   })
   if (error) throw new Error(error.message)
   return data ?? 0
+}
+
+export async function settleAssistantTokens(
+  organisationId: string,
+  claim: { tokens: number; at: string },
+  actual: number
+) {
+  if (claim.tokens <= 0 || claim.tokens === actual || !hasAdminClient()) return
+  const { error } = await createAdminSupabase().rpc("settle_assistant_tokens", {
+    p_organisation_id: organisationId,
+    p_claimed: claim.tokens,
+    p_actual: Math.max(0, Math.round(actual)),
+    p_claimed_at: claim.at,
+  })
+  if (error) throw new Error(error.message)
 }

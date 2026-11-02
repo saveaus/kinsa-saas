@@ -8,8 +8,6 @@ export const ALL_PERMISSIONS: AppPermission[] = [
   "documents.approve",
   "documents.upload_own",
   "documents.read_all",
-  "courses.manage",
-  "courses.take",
   "reminders.manage",
   "reports.export",
   "audit.read",

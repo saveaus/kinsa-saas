@@ -1,4 +1,3 @@
-import { format, startOfDay } from "date-fns"
 import { notFound } from "next/navigation"
 
 import { cn } from "cn"
@@ -6,11 +5,13 @@ import { AddLogEntryDialog } from "@/components/add-log-entry-dialog"
 import { BackLink } from "@/components/back-link"
 import type { LogPersonOption } from "@/components/log-person-field"
 import { RecordTable, type RecordRow } from "@/components/record-table"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
+import { LogEntryDone } from "@/components/log-entry-done"
 import { formatDate } from "@/lib/format-date"
+import { todayOn } from "@/lib/today"
 import { personName } from "@/lib/person-name"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import {
   getLogRegister,
   listSavedEntries,
@@ -26,6 +27,7 @@ const columns = [
   { id: "created", label: "Created", width: "8.75rem" },
   { id: "due", label: "Due", width: "8.75rem" },
   { id: "reminder", label: "Reminder", width: "7rem" },
+  { id: "done", label: "Done", width: "8rem" },
   { id: "files", label: "Files", locked: true, width: "14rem" },
 ]
 
@@ -37,7 +39,8 @@ export default async function LogFilePage({
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const log = await getLogRegister(context, id)
   if (!log || log.built_in) notFound()
   const [entries, workers, participants] = await Promise.all([
@@ -57,7 +60,7 @@ export default async function LogFilePage({
       group: "Workers" as const,
     })),
   ]
-  const today = format(startOfDay(new Date()), "yyyy-MM-dd")
+  const today = todayOn()
   const addEntry = (
     <AddLogEntryDialog registerId={log.id} people={people} today={today} />
   )
@@ -71,6 +74,13 @@ export default async function LogFilePage({
       due: { kind: "text", text: formatDate(entry.dueOn) },
       reminder: entry.remind
         ? { kind: "chip", text: "On", tone: "green" }
+        : { kind: "text", text: "—" },
+      done: entry.dueOn
+        ? {
+            kind: "slot",
+            text: entry.completedAt ? "Done" : "Open",
+            node: <LogEntryDone entryId={entry.id} completed={Boolean(entry.completedAt)} />,
+          }
         : { kind: "text", text: "—" },
       files:
         entry.files.length === 0

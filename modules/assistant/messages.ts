@@ -7,6 +7,7 @@ import {
   type AssistantAttachment,
 } from "@/modules/assistant/attachments"
 import {
+  applyPolicyFilings,
   parsePolicyDraft,
   policyDraftsFromParts,
   type AssistantPolicyDraft,
@@ -67,7 +68,7 @@ export type AssistantStoredMessage = {
   ratings?: AssistantRatingProposal[]
 }
 
-const messageLimit = 40
+const messageLimit = 200
 const textLimit = 4000
 
 export function chatTitleFrom(messages: AssistantStoredMessage[]) {
@@ -97,6 +98,7 @@ export function toStoredMessages(
     findings?: Readonly<Record<string, { status: "confirmed" | "cancelled"; result: string }>>
     ratings?: Readonly<Record<string, { status: "done" | "cancelled"; result: string }>>
     assignments?: Readonly<Record<string, AssignmentOutcome>>
+    policies?: Readonly<Record<string, string>>
   } = {}
 ) {
   const prior = new Map(previous.map((message) => [message.id, message]))
@@ -128,7 +130,12 @@ export function toStoredMessages(
     )
     const records = keepList(recordCardsFromParts(message.parts), earlier?.records)
     const snapshots = keepList(snapshotsFromParts(message.parts), earlier?.snapshots)
-    const policies = keepList(policyDraftsFromParts(message.parts), earlier?.policies)
+    const policies = applyPolicyFilings(
+      message.id,
+      keepList(policyDraftsFromParts(message.parts), earlier?.policies),
+      earlier?.policies,
+      decisions.policies ?? {}
+    )
     const tasks = applyTaskOutcomes(
       keepList(tasksFromParts(message.parts), earlier?.tasks),
       outcomes
@@ -170,9 +177,9 @@ export function toStoredMessages(
       ...(proposedFindings.length > 0 ? { proposedFindings } : {}),
       ...(ratings.length > 0 ? { ratings } : {}),
     })
-    if (stored.length >= messageLimit) break
   }
-  return stored
+  // Keep the newest: dropping them would silently lose what was just said.
+  return stored.slice(-messageLimit)
 }
 
 function dedupeFindings(findings: AuditFinding[]) {
@@ -279,9 +286,9 @@ export function parseStoredMessages(value: unknown) {
       ...(proposedFindings.length > 0 ? { proposedFindings } : {}),
       ...(ratings.length > 0 ? { ratings } : {}),
     })
-    if (stored.length >= messageLimit) break
   }
-  return stored
+  // Keep the newest: dropping them would silently lose what was just said.
+  return stored.slice(-messageLimit)
 }
 
 export function storedMessagesJson(messages: AssistantStoredMessage[]): Json {

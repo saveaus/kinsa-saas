@@ -2,9 +2,9 @@ import { notFound } from "next/navigation"
 
 import { BackLink } from "@/components/back-link"
 import { PolicyPdf } from "@/components/policy-pdf"
+import { registeredWall } from "@/components/registered-wall"
 import { formatDate } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { getIncident } from "@/modules/incidents/queries"
 import { listLogRegisters } from "@/modules/logs/queries"
 import { logShown } from "@/modules/logs/standing"
@@ -22,7 +22,8 @@ export async function IncidentFilePage({
 }) {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const incident = await getIncident(context, id)
   if (!incident || incident.kind !== kind) notFound()
   const logs = await listLogRegisters(context)

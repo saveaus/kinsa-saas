@@ -1,3 +1,4 @@
+import { registeredError } from "@/modules/billing/guard"
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -10,9 +11,11 @@ import {
   type ToolSet,
   type UIMessage,
 } from "ai"
+import { after } from "next/server"
 import { z } from "zod"
 
 import { standardsForGroups } from "@/lib/ndis-practice-standards"
+import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { can, getTenantContext, type TenantContext } from "@/lib/tenant"
 import { assistantAllowanceMessage } from "@/modules/assistant/allowance"
 import {
@@ -23,7 +26,11 @@ import { assistantSnapshot } from "@/modules/assistant/context"
 import {
   claimAssistantTrialTokens,
   loadAssistantAllowance,
+  settleAssistantTokens,
 } from "@/modules/assistant/usage"
+import { interviewReply, planInterviewTurn } from "@/modules/assistant/interview-turn"
+import { storedMessagesJson, type AssistantStoredMessage } from "@/modules/assistant/messages"
+import { promptChars, settledTokens } from "@/modules/assistant/settlement"
 import {
   assistantHistoryLimit,
   assistantModel,
@@ -67,6 +74,7 @@ import {
   parseAuditFinding,
 } from "@/modules/internal-audits/conduct"
 import { interviewTurn } from "@/modules/internal-audits/queries"
+import { mintRatingProposal } from "@/modules/internal-audits/rate"
 import { isAuditRating } from "@/modules/internal-audits/rating"
 import { listTeams } from "@/modules/teams/queries"
 
@@ -129,7 +137,7 @@ export async function POST(request: Request) {
     messages: incoming,
     chatId,
     audit: requestedAudit,
-  } = readRequest(await request.json())
+  } = readRequest(await request.json().catch(() => null))
   if (!incoming || incoming.length === 0) {
     return Response.json({ error: "Send a message." }, { status: 400 })
   }
@@ -159,6 +167,27 @@ export async function POST(request: Request) {
       },
       { status: 403 }
     )
+  }
+  if (interview && (await registeredError(context))) {
+    return Response.json(
+      { error: "Interviews are part of the Registered plan." },
+      { status: 403 }
+    )
+  }
+  // The browser sends the new answer only. The transcript is the server's.
+  const interviewPlan = interview
+    ? planInterviewTurn(turn.messages, incoming.at(-1))
+    : null
+  if (interview) {
+    if (!hasAdminClient()) {
+      return Response.json(
+        { error: "Interviews are not connected yet." },
+        { status: 501 }
+      )
+    }
+    if (!interviewPlan) {
+      return Response.json({ error: "Send your answer." }, { status: 400 })
+    }
   }
   const general = !interview && !audit
   const canReviewDocuments = general && can(context, "documents.approve")
@@ -231,7 +260,20 @@ export async function POST(request: Request) {
         execute: async ({ rating, summary }) => {
           if (!isAuditRating(rating) || turn.kind !== "interview")
             return { proposed: false }
-          return { proposed: true, rating, summary }
+          const proposal = await mintRatingProposal({
+            organisationId: context.organisationId,
+            assignmentId: turn.assignmentId,
+            userId: context.userId,
+            rating,
+            summary,
+          })
+          if (!proposal) return { proposed: false }
+          return {
+            proposed: true,
+            proposalId: proposal.id,
+            rating,
+            summary: proposal.summary,
+          }
         },
       })
     : null
@@ -383,7 +425,7 @@ export async function POST(request: Request) {
   }
 
   const messages = recentMessages(
-    incoming,
+    interviewPlan?.history ?? incoming,
     interview || audit ? interviewHistoryLimit : assistantHistoryLimit,
     interview || audit ? 2000 : 800,
     allowance.kind === "trial" ? trialDataUrlLimit : undefined
@@ -417,6 +459,7 @@ export async function POST(request: Request) {
         lastUserText(incoming)
       )
   let outputTokens = replyTokens
+  const claim = { tokens: 0, at: new Date().toISOString() }
   if (allowance.kind === "trial" || allowance.kind === "included") {
     const granted = await claimAssistantTrialTokens(
       context.organisationId,
@@ -432,32 +475,131 @@ export async function POST(request: Request) {
         { status: 402 }
       )
     }
+    claim.tokens = granted
     outputTokens = Math.min(replyTokens, granted)
   }
-  const result = streamText({
-    model: assistantModel,
-    temperature: assistantTemperature,
-    maxOutputTokens: outputTokens,
-    ...(tools ? { stopWhen: isStepCount(general ? 5 : 4) } : {}),
-    tools,
-    experimental_transform: smoothStream({ delayInMs: 45, chunking: "word" }),
-    instructions: guided,
-    messages: await convertToModelMessages(messages, {
+  const organisationId = context.organisationId
+  const settle = (actual: number) =>
+    settleAssistantTokens(organisationId, claim, actual).catch((error: unknown) => {
+      console.error("assistant settlement", error)
+    })
+  const saveInterview = async (stored: AssistantStoredMessage[]) => {
+    if (turn.kind !== "interview" || stored.length === 0) return
+    const { error } = await createAdminSupabase().rpc("append_interview_messages", {
+      p_chat_id: turn.chatId,
+      p_organisation_id: organisationId,
+      p_user_id: context.userId,
+      p_messages: storedMessagesJson(stored),
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  try {
+    if (interviewPlan?.append) await saveInterview([interviewPlan.append])
+
+    const modelMessages = await convertToModelMessages(messages, {
       tools,
       ignoreIncompleteToolCalls: true,
-    }),
-  })
+    })
+    const reply = {
+      id: crypto.randomUUID(),
+      text: "",
+      tools: [] as { toolName: string; toolCallId: string; output: unknown }[],
+      stepChars: 0,
+    }
+    const result = streamText({
+      model: assistantModel,
+      temperature: assistantTemperature,
+      maxOutputTokens: outputTokens,
+      ...(tools ? { stopWhen: isStepCount(general ? 5 : 4) } : {}),
+      tools,
+      abortSignal: request.signal,
+      experimental_transform: smoothStream({ delayInMs: 45, chunking: "word" }),
+      instructions: guided,
+      messages: modelMessages,
+      onChunk: ({ chunk }) => {
+        if (chunk.type === "text-delta") {
+          reply.text += chunk.text
+          reply.stepChars += chunk.text.length
+        }
+        if (chunk.type === "tool-result" && !chunk.preliminary) {
+          reply.tools.push({
+            toolName: chunk.toolName,
+            toolCallId: chunk.toolCallId,
+            output: chunk.output,
+          })
+        }
+      },
+      onStepEnd: () => {
+        reply.stepChars = 0
+      },
+      onError: ({ error }) => {
+        console.error("assistant stream", error)
+      },
+    })
 
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({
-      stream: surfaceEmptyError(result.stream),
-      onError: (error) => assistantErrorText(error),
-    }),
-  })
+    // These settle on finish, abort, and error alike. A rejection means no step finished.
+    const finished = Promise.resolve(result.steps)
+      .then(
+        (steps) => steps,
+        () => []
+      )
+      .then(async (steps) => {
+        const total = await Promise.resolve(result.totalUsage).then(
+          (usage) => usage.totalTokens,
+          () => null
+        )
+        const stored =
+          turn.kind === "interview" ? interviewReply(reply.id, reply.text, reply.tools) : null
+        await Promise.all([
+          settle(
+            settledTokens({
+              claimed: claim.tokens,
+              total,
+              stepTokens: steps.map((step) => step.usage.totalTokens),
+              aborted: request.signal.aborted,
+              promptChars: promptChars(guided, messages),
+              partialChars: reply.stepChars,
+            })
+          ),
+          saveInterview(stored ? [stored] : []).catch((error: unknown) => {
+            console.error("interview reply", error)
+          }),
+        ])
+      })
+      .catch((error: unknown) => {
+        console.error("assistant finish", error)
+      })
+    // A dropped connection never reaches the stream's end, so keep the function alive for this.
+    after(() => finished)
+
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream({
+        stream: surfaceEmptyError(result.stream, finished),
+        onError: (error) => assistantErrorText(error),
+        ...(interview ? { generateMessageId: () => reply.id } : {}),
+      }),
+    })
+  } catch (error) {
+    console.error("assistant start", error)
+    await settle(0)
+    return Response.json(
+      { error: "The assistant could not answer. Try again." },
+      { status: 500 }
+    )
+  }
 }
 
-/** Gemini sometimes ends a tool call with no text and finish reason error. Surface that, or the chat looks like it ignored the question. */
-function surfaceEmptyError<T extends StreamPart>(stream: ReadableStream<T>) {
+const settleWait = 4_000
+
+/**
+ * Gemini sometimes ends a tool call with no text and finish reason error. Surface that, or the chat looks like it ignored the question.
+ * The stream stays open until usage is settled, so the next turn sees the right allowance.
+ */
+function surfaceEmptyError<T extends StreamPart>(
+  stream: ReadableStream<T>,
+  finished: Promise<unknown>
+) {
   let sawContent = false
   return stream.pipeThrough(
     new TransformStream<T, T>({
@@ -474,6 +616,12 @@ function surfaceEmptyError<T extends StreamPart>(stream: ReadableStream<T>) {
           } as T)
         }
         controller.enqueue(part)
+      },
+      async flush() {
+        await Promise.race([
+          finished,
+          new Promise((resolve) => setTimeout(resolve, settleWait)),
+        ])
       },
     })
   )

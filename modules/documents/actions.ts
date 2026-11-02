@@ -6,6 +6,7 @@ import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import type { DocumentApprovalStatus } from "@/lib/database.types"
+import { staffError } from "@/modules/billing/guard"
 import { recordAudit } from "@/modules/audit/write"
 import { reviewUploadedDocument } from "@/modules/documents/assist"
 import { listTeamCodes } from "@/modules/teams/queries"
@@ -28,6 +29,8 @@ export async function uploadDocumentAction(
   } else {
     requirePermission(context, "documents.upload_own")
   }
+  const closed = await staffError(context)
+  if (closed) return { error: closed }
 
   const typeId = String(formData.get("document_type_version_id") ?? "")
   const expiresOn = String(formData.get("expires_on") ?? "") || null
@@ -41,6 +44,17 @@ export async function uploadDocumentAction(
   }
 
   const supabase = await createServerSupabase()
+  if (!expiresOn) {
+    const { data: type, error: typeError } = await supabase
+      .from("document_type_versions")
+      .select("requires_expiry")
+      .eq("id", typeId)
+      .maybeSingle()
+    if (typeError) return { error: typeError.message }
+    if (type?.requires_expiry) {
+      return { error: "This document needs an expiry date." }
+    }
+  }
   const documentId = crypto.randomUUID()
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "bin"
   const storagePath = `${context.organisationId}/${workerId}/${documentId}/${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`
@@ -94,12 +108,33 @@ export async function uploadDocumentAction(
 
 export async function reviewDocumentAction(
   documentId: string,
-  status: DocumentApprovalStatus
-): Promise<DocumentActionState> {
+  status: DocumentApprovalStatus,
+  expiresOn?: string
+): Promise<DocumentActionState & { needsExpiry?: boolean }> {
   const { context } = await requireTenant()
   requirePermission(context, "documents.approve")
+  const closed = await staffError(context)
+  if (closed) return { error: closed }
 
   const supabase = await createServerSupabase()
+  if (expiresOn && !/^\d{4}-\d{2}-\d{2}$/.test(expiresOn)) {
+    return { error: "Enter a valid expiry date." }
+  }
+  if (status === "approved" && !expiresOn) {
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .select("expires_on, document_type_versions(requires_expiry)")
+      .eq("id", documentId)
+      .eq("organisation_id", context.organisationId)
+      .maybeSingle()
+    if (documentError) return { error: documentError.message }
+    const type = document?.document_type_versions as unknown as {
+      requires_expiry: boolean
+    } | null
+    if (document && !document.expires_on && type?.requires_expiry) {
+      return { error: "Add the expiry date to approve this.", needsExpiry: true }
+    }
+  }
   const reviewedAt = new Date().toISOString()
   const update =
     status === "pending"
@@ -109,6 +144,7 @@ export async function reviewDocumentAction(
           flagged: false,
           reviewed_by: context.userId,
           reviewed_at: reviewedAt,
+          ...(expiresOn ? { expires_on: expiresOn } : {}),
         }
   const { error } = await supabase
     .from("documents")

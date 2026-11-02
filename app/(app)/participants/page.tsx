@@ -1,8 +1,8 @@
 import { AddParticipantDialog } from "@/components/add-participant-dialog"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import type { ChipTone } from "@/components/chip"
+import { registeredWall } from "@/components/registered-wall"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { listParticipants } from "@/modules/participants/queries"
 import {
   documentStanding,
@@ -33,7 +33,8 @@ function standingCell(
 export default async function ParticipantsPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const participants = await listParticipants(context)
 
   const rows: RecordRow[] = participants.map((participant) => ({
@@ -72,6 +73,7 @@ export default async function ParticipantsPage() {
           { id: "status", label: "Status" },
         ]}
         rows={rows}
+        spacing="relaxed"
         empty="No participants yet"
         emptyDescription="Add a participant, then attach the service agreement and support plan."
       />

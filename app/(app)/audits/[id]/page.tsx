@@ -1,16 +1,14 @@
 import { ClipboardCheck } from "lucide-react"
 import Link from "next/link"
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 
 import { AuditOutline } from "@/components/audit-outline"
 import { BackLink } from "@/components/back-link"
 import { EmptyState } from "@/components/empty-state"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
-import { can, requireTenant } from "@/lib/tenant"
-import { allowsRegistered } from "@/modules/billing/access"
-import { getOrganisationBilling } from "@/modules/billing/queries"
-import { stripeConfigured } from "@/modules/billing/stripe"
+import { can, requireTenant, type TenantContext } from "@/lib/tenant"
 import {
   applicableCatalogue,
   getInternalAudit,
@@ -23,21 +21,21 @@ export default async function InternalAuditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
   const { context } = await requireTenant()
-  const manage = can(context, "settings.manage")
-  const billing = await getOrganisationBilling(context.organisationId)
-  if (!allowsRegistered(billing, new Date(), stripeConfigured())) {
-    if (manage) redirect("/settings/billing")
-    return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="Internal audits are unavailable"
-        description="They are part of the Registered plan."
-      />
-    )
-  }
+  const wall = await registeredWall(context)
+  if (wall) return wall
+  return <InternalAuditContent context={context} params={params} />
+}
 
+async function InternalAuditContent({
+  context,
+  params,
+}: {
+  context: TenantContext
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const manage = can(context, "settings.manage")
   const audit = await getInternalAudit(context, id)
   if (!audit) notFound()
   const [assignments, members] = await Promise.all([
@@ -97,7 +95,7 @@ export default async function InternalAuditPage({
                 <li key={userId}>
                   <Link
                     href={`/audits/${audit.id}/people/${userId}`}
-                    className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm hover:bg-muted"
+                    className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
                   >
                     {person.label}
                     <span className="text-muted-foreground">

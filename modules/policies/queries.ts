@@ -1,15 +1,20 @@
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 
 export async function listPolicies(context: TenantContext) {
   const supabase = await createServerSupabase()
-  const { data, error } = await supabase
-    .from("policies")
-    .select(
-      "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename, template_key, category, file_id, compliance_flagged"
-    )
-    .eq("organisation_id", context.organisationId)
-    .order("name", { ascending: true })
+  const { data, error } = await fetchAll((from, to) =>
+      supabase
+      .from("policies")
+      .select(
+        "id, name, standard_code, review_on, status, drafted_by, mime_type, original_filename, template_key, category, file_id, compliance_flagged"
+      )
+      .eq("organisation_id", context.organisationId)
+      .order("name", { ascending: true })
+      .order("id")
+      .range(from, to)
+  )
 
   if (error) throw new Error(error.message)
   return data ?? []

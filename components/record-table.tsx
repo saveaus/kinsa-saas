@@ -29,8 +29,6 @@ import {
   RecordStatusMenu,
   type RecordStatusTarget,
 } from "@/components/record-status-menu"
-import { EditReminderRuleButton } from "@/components/reminder-rule-actions"
-import { CourseSettingsButton } from "@/components/course-settings-actions"
 import { ReviewActions } from "@/components/review-actions"
 import { ItemStatusBadge, OverallBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -56,7 +54,6 @@ import {
   type ComplianceItemStatus,
   type WorkerCompliance,
 } from "@/modules/documents/compliance"
-import type { ReminderCategory } from "@/modules/reminders/categories"
 
 export type RecordCell =
   | { kind: "text"; text: string }
@@ -126,25 +123,6 @@ export type RecordCell =
     }
   | { kind: "score"; met: number; total: number; percent: number }
   | { kind: "progress"; percent: number }
-  | {
-      kind: "rule"
-      text: string
-      ruleId: string
-      category: ReminderCategory
-      days: number
-      subject: string
-      body: string
-    }
-  | {
-      kind: "courseSettings"
-      text: string
-      courseId: string
-      title: string
-      passMark: number
-      renewalMonths: number | null
-      roles: string[]
-      roleOptions?: { value: string; label: string }[]
-    }
   | { kind: "slot"; text: string; node: React.ReactNode }
 
 export type RecordColumn = {
@@ -348,18 +326,6 @@ function CellView({
           <span className="tabular-nums">{cell.percent}%</span>
         </span>
       )
-    case "rule":
-      return (
-        <EditReminderRuleButton
-          rule={{
-            id: cell.ruleId,
-            category: cell.category,
-            days: cell.days,
-            subject: cell.subject,
-            body: cell.body,
-          }}
-        />
-      )
     case "overall":
       return (
         <button
@@ -422,17 +388,6 @@ function CellView({
           mimeType={cell.mimeType}
         />
       )
-    case "courseSettings":
-      return (
-        <CourseSettingsButton
-          courseId={cell.courseId}
-          title={cell.title}
-          passMark={cell.passMark}
-          renewalMonths={cell.renewalMonths}
-          roles={cell.roles}
-          roleOptions={cell.roleOptions}
-        />
-      )
     case "slot":
       return cell.node
     default: {
@@ -459,6 +414,7 @@ export function RecordTable({
   pageSize = 50,
   moreHref,
   initialFilters = [],
+  spacing = "compact",
 }: {
   title: string
   columns: RecordColumn[]
@@ -476,6 +432,7 @@ export function RecordTable({
   pageSize?: number
   moreHref?: string
   initialFilters?: Array<Pick<FilterRule, "columnId" | "operator" | "value">>
+  spacing?: "compact" | "relaxed"
 }) {
   const [order, setOrder] = useState(() => columns.map((column) => column.id))
   const [hidden, setHidden] = useState<string[]>([])
@@ -987,13 +944,14 @@ export function RecordTable({
           <table
             className={cn(
               "w-full border-collapse text-[13px]",
+              spacing === "relaxed" && "min-w-max",
               visibleIds.some((id) => columnById.get(id)?.clip) && "table-fixed"
             )}
           >
             <thead>
               <tr className="border-b text-left text-xs font-normal text-muted-foreground">
                 {selectable ? (
-                  <th className="w-10 px-3 py-2">
+                  <th className={cn("w-10", spacing === "relaxed" ? "px-4 py-3" : "px-3 py-2")}>
                     <Checkbox
                       checked={allVisibleSelected}
                       aria-label="Select all"
@@ -1017,7 +975,10 @@ export function RecordTable({
                         style={
                           column.width ? { width: column.width } : undefined
                         }
-                        className="px-3 py-2 font-normal whitespace-nowrap"
+                        className={cn(
+                          "font-normal whitespace-nowrap",
+                          spacing === "relaxed" ? "px-4 py-3" : "px-3 py-2"
+                        )}
                       >
                         {column.label}
                       </th>
@@ -1027,7 +988,10 @@ export function RecordTable({
                     <th
                       key={column.id}
                       style={column.width ? { width: column.width } : undefined}
-                      className="px-1 py-1 font-normal whitespace-nowrap"
+                      className={cn(
+                        "font-normal whitespace-nowrap",
+                        spacing === "relaxed" ? "px-2 py-2" : "px-1 py-1"
+                      )}
                     >
                       <DropdownMenu>
                         <DropdownMenuTrigger
@@ -1035,7 +999,10 @@ export function RecordTable({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2 font-normal text-muted-foreground"
+                              className={cn(
+                                "px-2 font-normal text-muted-foreground",
+                                spacing === "relaxed" ? "h-8" : "h-7"
+                              )}
                             />
                           }
                         >
@@ -1100,7 +1067,7 @@ export function RecordTable({
                     className="border-b last:border-0 hover:bg-muted/40"
                   >
                     {selectable ? (
-                      <td className="px-3 py-1.5">
+                      <td className={spacing === "relaxed" ? "px-4 py-3" : "px-3 py-1.5"}>
                         <Checkbox
                           checked={selected.includes(row.id)}
                           aria-label="Select row"
@@ -1124,7 +1091,8 @@ export function RecordTable({
                             column?.width ? { width: column.width } : undefined
                           }
                           className={cn(
-                            "px-3 py-1.5 whitespace-nowrap",
+                            "whitespace-nowrap",
+                            spacing === "relaxed" ? "px-4 py-3" : "px-3 py-1.5",
                             column?.clip && "overflow-hidden"
                           )}
                         >

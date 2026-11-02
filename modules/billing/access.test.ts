@@ -3,9 +3,11 @@ import test from "node:test"
 
 import {
   allowsRegistered,
+  allowsStaff,
   billedSeats,
   planAmount,
   trialDaysRemaining,
+  trialHasEnded,
   type BillingSnapshot,
 } from "@/modules/billing/access"
 
@@ -84,6 +86,15 @@ test("billing stays open when Stripe is not configured", () => {
   )
 })
 
+test("a trial with no days left has ended", () => {
+  assert.equal(trialHasEnded(billing({ trialEndsAt: "2026-10-03T00:00:00.000Z" }), now), true)
+  assert.equal(trialHasEnded(billing(), now), false)
+  assert.equal(
+    trialHasEnded(billing({ plan: "registered", status: "active", trialEndsAt: null }), now),
+    false
+  )
+})
+
 test("trial days remaining counts the last partial day", () => {
   assert.equal(trialDaysRemaining("2026-10-04T12:00:00.000Z", now), 1)
   assert.equal(trialDaysRemaining("2026-10-03T00:00:00.000Z", now), 0)
@@ -97,4 +108,14 @@ test("plans are priced per active worker", () => {
 test("billed seats are at least one", () => {
   assert.equal(billedSeats(0), 1)
   assert.equal(billedSeats(4), 4)
+})
+
+test("Staff features need a live subscription or an open trial", () => {
+  const ended = "2026-10-01T00:00:00.000Z"
+  assert.equal(allowsStaff(billing(), now), true)
+  assert.equal(allowsStaff(billing({ trialEndsAt: ended }), now), false)
+  assert.equal(allowsStaff(billing({ status: "active", plan: "staff" }), now), true)
+  assert.equal(allowsStaff(billing({ status: "canceled", plan: "staff" }), now), false)
+  assert.equal(allowsStaff(billing({ status: "past_due", plan: "registered" }), now), false)
+  assert.equal(allowsStaff(billing({ status: "canceled" }), now, false), true)
 })

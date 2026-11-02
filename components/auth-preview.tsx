@@ -1,113 +1,116 @@
+import {
+  ArrowUp,
+  FileDown,
+  FileText,
+  LayoutDashboard,
+  ListTodo,
+  ScrollText,
+  Sparkles,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
+
 import { Chip } from "@/components/chip"
 import { OrgMark, organisationInitials } from "@/components/org-mark"
-import { NDIS_REGISTRATION_GROUPS } from "@/lib/ndis-registration-groups"
+
+const nav: { label: string; group: string | null; icon: LucideIcon }[] = [
+  { label: "Dashboard", group: null, icon: LayoutDashboard },
+  { label: "Assistant", group: null, icon: Sparkles },
+  { label: "Tasks", group: "Work", icon: ListTodo },
+  { label: "Workers", group: "Records", icon: Users },
+  { label: "Policies", group: "Records", icon: FileText },
+  { label: "Logs", group: "Records", icon: ScrollText },
+  { label: "Evidence", group: "Reports", icon: FileDown },
+]
 
 const workers = [
   { name: "Alex Chen", role: "Support worker", percent: "25%", tone: "yellow" as const },
   { name: "Sam Patel", role: "Support worker", percent: "100%", tone: "green" as const },
-  { name: "Jordan Lee", role: "Team leader", percent: "0%", tone: "red" as const },
-  { name: "Riley Nguyen", role: "Complex care", percent: "51%", tone: "yellow" as const },
+  { name: "Jordan Lee", role: "Leader", percent: "0%", tone: "red" as const },
 ]
 
-const nav = ["Dashboard", "Tasks", "Workers", "Policies", "Logs", "Evidence"]
-
-type Focus = "person" | "workspace" | "groups"
-
-function activeNav(focus: Focus) {
-  switch (focus) {
-    case "person":
-      return "Workers"
-    case "groups":
-      return "Policies"
-    case "workspace":
-      return null
-    default: {
-      const exhaustive: never = focus
-      return exhaustive
-    }
-  }
-}
+const checks = [
+  { item: "NDIS worker screening", status: "Missing", tone: "red" as const },
+  { item: "First aid", status: "Met", tone: "green" as const },
+  { item: "Person-centred supports", status: "Met", tone: "green" as const },
+  { item: "Complaints register", status: "Due today", tone: "yellow" as const },
+]
 
 export function AccountPreview({ name }: { name: string }) {
-  const label = name.trim()
-  return <WorkspaceShot workspace="Workspace" person={label || "You"} account={label || null} focus="person" />
+  const label = name.trim() || "You"
+  return (
+    <ProductFrame workspace="Workspace" active="Workers" account={label}>
+      <WorkersPreview person={label} />
+    </ProductFrame>
+  )
 }
 
 export function OrganisationPreview({
   name,
   logoUrl = null,
-  registrationGroups = [],
-  abn,
-  registrationNumber,
-  focus,
 }: {
   name: string
   logoUrl?: string | null
-  registrationGroups?: string[]
-  abn?: string
-  registrationNumber?: string
-  focus: "workspace" | "groups"
 }) {
   return (
-    <WorkspaceShot
+    <ProductFrame
       workspace={name.trim() || "Your organisation"}
       logoUrl={logoUrl}
-      focus={focus}
-      groups={registrationGroups}
-      abn={abn}
-      registrationNumber={registrationNumber}
-    />
+      active="Dashboard"
+    >
+      <DashboardPreview />
+    </ProductFrame>
   )
 }
 
-function WorkspaceShot({
+function ProductFrame({
   workspace,
   logoUrl = null,
-  person,
-  account = null,
-  groups = [],
-  abn,
-  registrationNumber,
-  focus,
+  active,
+  account,
+  children,
 }: {
   workspace: string
   logoUrl?: string | null
-  person?: string
-  account?: string | null
-  groups?: string[]
-  abn?: string
-  registrationNumber?: string
-  focus: Focus
+  active: string
+  account?: string
+  children: React.ReactNode
 }) {
-  const labelled = groups
-    .map((code) => NDIS_REGISTRATION_GROUPS.find((group) => group.code === code))
-    .filter((group) => group !== undefined)
+  let shownGroup: string | null = null
 
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-8 right-0 bottom-0 left-6 overflow-hidden rounded-tl-xl border bg-background shadow-sm [mask-image:linear-gradient(black,black_78%,transparent)]">
+      <div className="absolute inset-6 overflow-hidden rounded-xl border bg-background shadow-sm">
         <div className="flex h-full">
-          <aside className="flex w-36 shrink-0 flex-col border-r bg-sidebar px-2 py-2">
-            <div
-              className={`flex items-center gap-2 rounded-md px-1.5 py-1.5 ${
-                focus === "workspace" ? "ring-2 ring-primary" : ""
-              }`}
-            >
-              <OrgMark name={workspace} logoUrl={logoUrl ?? null} />
+          <aside className="flex h-full w-40 shrink-0 flex-col border-r bg-sidebar px-2 py-2">
+            <div className="flex items-center gap-2 rounded-md px-1.5 py-1.5">
+              <OrgMark name={workspace} logoUrl={logoUrl} />
               <span className="truncate text-[11px] font-medium">{workspace}</span>
             </div>
-            <ul className="mt-3 grid gap-0.5 text-[11px] text-muted-foreground">
-              {nav.map((item) => (
-                <li
-                  key={item}
-                  className={`rounded-md px-1.5 py-1 ${activeNav(focus) === item ? "bg-sidebar-accent text-foreground" : ""}`}
-                >
-                  {item}
-                </li>
-              ))}
+            <ul className="mt-3 grid gap-0.5">
+              {nav.map((item) => {
+                const heading = item.group !== shownGroup ? item.group : null
+                shownGroup = item.group
+                const selected = item.label === active
+                return (
+                  <li key={item.label}>
+                    {heading ? (
+                      <p className="px-1.5 pt-2 pb-0.5 text-[9px] text-muted-foreground">{heading}</p>
+                    ) : null}
+                    <p
+                      className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] ${
+                        selected ? "bg-sidebar-accent font-medium text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      <item.icon className="size-3 shrink-0" />
+                      {item.label}
+                    </p>
+                  </li>
+                )
+              })}
             </ul>
             {account ? (
-              <div className="mt-3 flex items-center gap-1.5 border-t px-1.5 pt-2">
+              <div className="mt-auto flex items-center gap-1.5 border-t px-1.5 pt-2">
                 <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[8px] font-medium text-primary">
                   {organisationInitials(account)}
                 </span>
@@ -115,36 +118,74 @@ function WorkspaceShot({
               </div>
             ) : null}
           </aside>
-          <div className="min-w-0 flex-1">
-            {focus === "person" ? <PeoplePreview person={person ?? "You"} /> : null}
-            {focus === "workspace" ? (
-              <DetailsPreview workspace={workspace} abn={abn} registrationNumber={registrationNumber} />
-            ) : null}
-            {focus === "groups" ? <GroupsPreview groups={labelled} /> : null}
-          </div>
+          <div className="min-w-0 flex-1">{children}</div>
         </div>
       </div>
     </div>
   )
 }
 
-function PeoplePreview({ person }: { person: string }) {
+function DashboardPreview() {
+  return (
+    <div className="grid gap-3 p-3">
+      <div className="rounded-xl border bg-background px-2.5 py-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-3 shrink-0 text-muted-foreground" />
+          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">Ask a question</p>
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <ArrowUp className="size-3" />
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <span className="rounded-md bg-[#F1F2F4] px-1.5 py-0.5 text-[9px] font-medium text-[#5E6570]">
+          What&apos;s due this week
+        </span>
+        <span className="rounded-md bg-[#F1F2F4] px-1.5 py-0.5 text-[9px] font-medium text-[#5E6570]">
+          Draft a policy
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-lg border">
+        <div className="flex items-center justify-between border-b px-2.5 py-1.5">
+          <p className="text-[11px] font-medium">Today&apos;s check</p>
+          <span className="rounded-md border px-1.5 py-0.5 text-[9px]">Download pack</span>
+        </div>
+        <table className="w-full text-left text-[10px]">
+          <tbody>
+            {checks.map((row) => (
+              <tr key={row.item} className="border-b last:border-0">
+                <td className="px-2.5 py-1.5">{row.item}</td>
+                <td className="px-2 py-1.5 text-right">
+                  <Chip tone={row.tone} className="h-4 px-1 text-[9px]">
+                    {row.status}
+                  </Chip>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function WorkersPreview({ person }: { person: string }) {
   return (
     <div>
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <p className="text-[11px] font-medium">Workers</p>
-        <span className="rounded-md bg-foreground px-1.5 py-0.5 text-[10px] text-background">Add worker</span>
+        <p className="text-[11px] font-medium">All workers</p>
+        <span className="rounded-md bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">Add worker</span>
       </div>
       <table className="w-full text-left text-[10px]">
         <thead className="text-muted-foreground">
           <tr className="border-b">
             <th className="px-3 py-1.5 font-normal">Name</th>
-            <th className="px-2 py-1.5 font-normal">Role</th>
-            <th className="px-2 py-1.5 font-normal">Compliance</th>
+            <th className="px-2 py-1.5 font-normal">Teams</th>
+            <th className="px-2 py-1.5 font-normal">Percent</th>
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b ring-2 ring-primary ring-inset">
+          <tr className="border-b">
             <td className="px-3 py-1.5 font-medium">{person}</td>
             <td className="px-2 py-1.5 text-muted-foreground">Administrator</td>
             <td className="px-2 py-1.5">
@@ -166,60 +207,6 @@ function PeoplePreview({ person }: { person: string }) {
           ))}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-function DetailsPreview({
-  workspace,
-  abn,
-  registrationNumber,
-}: {
-  workspace: string
-  abn?: string
-  registrationNumber?: string
-}) {
-  return (
-    <div className="px-4 py-4">
-      <p className="text-[11px] font-medium">Business details</p>
-      <p className="mt-1 text-[10px] text-muted-foreground">Printed on training certificates.</p>
-      <dl className="mt-3 grid gap-2 text-[11px]">
-        <div>
-          <dt className="text-muted-foreground">Organisation</dt>
-          <dd className="font-medium">{workspace}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">ABN</dt>
-          <dd>{abn?.trim() || "Not added"}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">NDIS registration</dt>
-          <dd>{registrationNumber?.trim() || "Not added"}</dd>
-        </div>
-      </dl>
-    </div>
-  )
-}
-
-function GroupsPreview({ groups }: { groups: { code: string; name: string }[] }) {
-  return (
-    <div className="m-3 rounded-lg ring-2 ring-primary">
-      <p className="border-b px-3 py-2 text-[11px] font-medium">Registration groups</p>
-      {groups.length === 0 ? (
-        <p className="px-3 py-3 text-[10px] text-muted-foreground">Select the services you are registered for.</p>
-      ) : (
-        <ul className="text-[10px]">
-          {groups.slice(0, 6).map((group) => (
-            <li key={group.code} className="border-b px-3 py-1.5 last:border-0">
-              <span className="font-medium tabular-nums">{group.code}</span>
-              <span className="text-muted-foreground"> {group.name}</span>
-            </li>
-          ))}
-          {groups.length > 6 ? (
-            <li className="px-3 py-1.5 text-muted-foreground">+{groups.length - 6} more</li>
-          ) : null}
-        </ul>
-      )}
     </div>
   )
 }

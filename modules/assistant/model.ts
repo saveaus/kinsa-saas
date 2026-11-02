@@ -14,7 +14,7 @@ export const interviewReplyTokens = 700
 export const interviewHistoryLimit = 24
 
 export function policyDraftRequested(text: string) {
-  const draft = "(?:draft|write|generate|create)"
+  const draft = "(?:draft|write|generate|create|file)"
   const policy = "polic(?:y|ies)"
   const gap = "(?:\\s+\\w+){0,8}\\s+"
   return new RegExp(`\\b${draft}\\b${gap}${policy}\\b`, "i").test(text)

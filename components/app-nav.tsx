@@ -12,6 +12,7 @@ import {
   KeyRound,
   LayoutDashboard,
   ListTodo,
+  Mail,
   Settings,
   Shield,
   Sparkles,
@@ -62,7 +63,7 @@ type NavItem = {
   icon?: LucideIcon
 }
 
-function adminGroups(): { label?: string; items: NavItem[] }[] {
+function adminGroups(followUps: boolean): { label?: string; items: NavItem[] }[] {
   return [
     {
       items: [
@@ -75,6 +76,9 @@ function adminGroups(): { label?: string; items: NavItem[] }[] {
       items: [
         { href: "/tasks", label: "Tasks", icon: ListTodo },
         { href: "/approvals", label: "Approvals", icon: BadgeCheck },
+        ...(followUps
+          ? [{ href: "/workflows", label: "Follow-ups", icon: Mail }]
+          : []),
       ],
     },
     {
@@ -323,7 +327,13 @@ export function WorkspaceHeader({
   )
 }
 
-export function AppNav({ admin }: { admin: boolean }) {
+export function AppNav({
+  admin,
+  followUps = false,
+}: {
+  admin: boolean
+  followUps?: boolean
+}) {
   const pathname = usePathname()
 
   if (!admin) {
@@ -350,7 +360,7 @@ export function AppNav({ admin }: { admin: boolean }) {
 
   return (
     <>
-      {adminGroups().map((group) => (
+      {adminGroups(followUps).map((group) => (
         <Fragment key={group.label ?? "home"}>
           {group.label ? (
             <NavGroup

@@ -50,7 +50,7 @@ export async function AppShell({
           admin={admin}
         />
         <SidebarContent>
-          <AppNav admin={admin} />
+          <AppNav admin={admin} followUps={can(context, "reminders.manage")} />
         </SidebarContent>
         <SidebarFooter className="gap-1">
           <AppFooterNav admin={admin} />
@@ -80,7 +80,7 @@ export async function AppShell({
           <SidebarTrigger />
         </header>
         {billingNotice ? <BillingNoticeBar notice={billingNotice} /> : null}
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 has-[[data-assistant]]:overflow-hidden has-[[data-assistant]]:p-0 has-[[data-worker-record]]:overflow-hidden has-[[data-worker-record]]:p-0 md:p-6 md:has-[[data-assistant]]:p-0 md:has-[[data-worker-record]]:p-0">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 has-[[data-assistant]]:overflow-hidden has-[[data-assistant]]:p-0 has-[[data-worker-record]]:overflow-hidden has-[[data-worker-record]]:p-0 has-[[data-participant-record]]:overflow-hidden has-[[data-participant-record]]:p-0 has-[[data-workflows]]:overflow-hidden has-[[data-workflows]]:p-0 md:p-6 md:has-[[data-assistant]]:p-0 md:has-[[data-worker-record]]:p-0 md:has-[[data-participant-record]]:p-0 md:has-[[data-workflows]]:p-0">
           {children}
         </div>
       </SidebarInset>

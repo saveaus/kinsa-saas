@@ -262,9 +262,9 @@ test("high intensity and behaviour support training is left out of a verificatio
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:pbs",
+            key: "doc:pbs",
             label: "Positive Behaviour Support in Practice",
-            kind: "course",
+            kind: "document",
             code: "PS-01",
             status: "missing",
           },
@@ -285,7 +285,7 @@ test("high intensity and behaviour support training is left out of a verificatio
     })
   )
   assert.equal(items.some((item) => item.key === "worker:w1:doc:bowel"), false)
-  assert.equal(items.some((item) => item.key === "worker:w1:course:pbs"), false)
+  assert.equal(items.some((item) => item.key === "worker:w1:doc:pbs"), false)
   assert.equal(items.some((item) => item.key === "worker:w1:doc:police"), true)
 })
 
@@ -299,9 +299,9 @@ test("high intensity training counts when that registration group applies", () =
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:bowel",
+            key: "doc:bowel-care",
             label: "Complex Bowel Care",
-            kind: "course",
+            kind: "document",
             code: "CC-01",
             status: "missing",
           },
@@ -309,10 +309,10 @@ test("high intensity training counts when that registration group applies", () =
       ],
     })
   )
-  assert.equal(items.some((item) => item.key === "worker:w1:course:bowel"), true)
+  assert.equal(items.some((item) => item.key === "worker:w1:doc:bowel-care"), true)
 })
 
-test("implementing behaviour support keeps behaviour courses and drops high intensity", () => {
+test("implementing behaviour support keeps behaviour credentials and drops high intensity", () => {
   const items = scoreAuditPack(
     input({
       registrationGroups: ["0107"],
@@ -322,9 +322,9 @@ test("implementing behaviour support keeps behaviour courses and drops high inte
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:pbs",
+            key: "doc:pbs",
             label: "Positive Behaviour Support in Practice",
-            kind: "course",
+            kind: "document",
             code: "PS-01",
             status: "missing",
           },
@@ -334,9 +334,9 @@ test("implementing behaviour support keeps behaviour courses and drops high inte
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:bowel",
+            key: "doc:bowel-care",
             label: "Complex Bowel Care",
-            kind: "course",
+            kind: "document",
             code: "CC-01",
             status: "missing",
           },
@@ -344,8 +344,8 @@ test("implementing behaviour support keeps behaviour courses and drops high inte
       ],
     })
   )
-  assert.equal(items.some((item) => item.key === "worker:w1:course:pbs"), true)
-  assert.equal(items.some((item) => item.key === "worker:w1:course:bowel"), false)
+  assert.equal(items.some((item) => item.key === "worker:w1:doc:pbs"), true)
+  assert.equal(items.some((item) => item.key === "worker:w1:doc:bowel-care"), false)
 })
 
 test("core mealtime and medication training still count for a verification provider", () => {
@@ -358,9 +358,9 @@ test("core mealtime and medication training still count for a verification provi
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:mealtime",
+            key: "doc:mealtime",
             label: "Supporting Safe Mealtimes",
-            kind: "course",
+            kind: "document",
             code: "SE-14",
             status: "missing",
           },
@@ -381,7 +381,7 @@ test("core mealtime and medication training still count for a verification provi
     })
   )
   assert.equal(
-    items.some((item) => item.key === "worker:w1:course:mealtime"),
+    items.some((item) => item.key === "worker:w1:doc:mealtime"),
     true
   )
   assert.equal(
@@ -399,9 +399,9 @@ test("with no registration groups, high intensity training is left out and other
           workerName: "Jordan Hale",
           href: "/workers/w1",
           item: {
-            key: "course:bowel",
+            key: "doc:bowel-care",
             label: "Complex Bowel Care",
-            kind: "course",
+            kind: "document",
             code: "CC-01",
             status: "missing",
           },
@@ -421,7 +421,7 @@ test("with no registration groups, high intensity training is left out and other
       ],
     })
   )
-  assert.equal(items.some((item) => item.key === "worker:w1:course:bowel"), false)
+  assert.equal(items.some((item) => item.key === "worker:w1:doc:bowel-care"), false)
   assert.equal(items.some((item) => item.key === "worker:w1:doc:police"), true)
 })
 
@@ -436,9 +436,9 @@ test("open item counts leave out evidence that is already current", () => {
       href: "/policies",
     },
     {
-      key: "course",
+      key: "clearance",
       label: "Fire safety",
-      area: "course",
+      area: "clearance",
       status: "overdue",
       detail: "Expired",
       href: "/workers/w1",
@@ -465,7 +465,7 @@ test("open item counts leave out evidence that is already current", () => {
     packAreaCounts(items).map((row) => [row.area, row.count]),
     [
       ["policy", 1],
-      ["course", 1],
+      ["clearance", 1],
     ]
   )
 })
@@ -492,4 +492,35 @@ test("a lapsing item stays on the daily list and still counts toward the score",
   const readiness = packReadiness(items)
   assert.equal(readiness.met, 1)
   assert.ok(readiness.total > 1)
+})
+
+test("a flagged policy is a gap even when accepted and acknowledged", () => {
+  const policy = {
+    id: "p1",
+    standardCode: "verification.risk",
+    name: "Risk",
+    status: "accepted" as const,
+    reviewOn: "2027-10-04",
+    acknowledged: true,
+  }
+  const score = (flagged: boolean) =>
+    scoreAuditPack(
+      input({ registrationGroups: ["0128"], policies: [{ ...policy, flagged }] })
+    ).find((item) => item.key === "policy:verification.risk")
+  assert.equal(score(false)?.status, "met")
+  assert.equal(score(true)?.status, "unaccepted")
+  assert.equal(score(true)?.detail, "Does not meet the current standard")
+})
+
+test("a log entry due today is lapsing, and an earlier one is overdue", () => {
+  const items = scoreAuditPack(
+    input({
+      logDue: [
+        { id: "a", summary: "Today", dueOn: "2026-10-04", href: "/logs" },
+        { id: "b", summary: "Earlier", dueOn: "2026-10-01", href: "/logs" },
+      ],
+    })
+  )
+  assert.equal(items.find((item) => item.key === "log-due:a")?.status, "lapsing")
+  assert.equal(items.find((item) => item.key === "log-due:b")?.status, "overdue")
 })

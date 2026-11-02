@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CreditCard,
   KeyRound,
-  Mail,
   Shield,
   Users,
   type LucideIcon,
@@ -31,7 +30,6 @@ const sectionIcons: Record<string, LucideIcon> = {
   "/settings/permissions": Shield,
   "/settings/credentials": BadgeCheck,
   "/settings/billing": CreditCard,
-  "/settings/emails": Mail,
 }
 
 function readGroupOpen(group: string) {

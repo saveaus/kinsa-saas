@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import type {
@@ -20,15 +21,23 @@ export async function listParticipants(context: TenantContext) {
   const supabase = await createServerSupabase()
   const [{ data: people, error: peopleError }, { data: files, error: filesError }] =
     await Promise.all([
-      supabase
-        .from("participants")
-        .select("id, name, ndis_number, active")
-        .eq("organisation_id", context.organisationId)
-        .order("name", { ascending: true }),
-      supabase
-        .from("participant_records")
-        .select("participant_id, kind, status, ends_on, review_on")
-        .eq("organisation_id", context.organisationId),
+      fetchAll((from, to) =>
+        supabase
+          .from("participants")
+          .select("id, name, ndis_number, active")
+          .eq("organisation_id", context.organisationId)
+          .order("name", { ascending: true })
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("participant_records")
+          .select("participant_id, kind, status, ends_on, review_on")
+          .eq("organisation_id", context.organisationId)
+          .order("id")
+          .range(from, to)
+      ),
     ])
 
   if (peopleError) throw new Error(peopleError.message)

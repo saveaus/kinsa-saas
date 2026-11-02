@@ -22,7 +22,7 @@ export async function assistantSnapshot(context: TenantContext) {
   if (!can(context, "workers.read_all")) {
     return [
       `Person: ${name}`,
-      "Scope: their own training and documents. Organisation-wide evidence is not included.",
+      "Scope: their own documents. Organisation-wide evidence is not included.",
     ].join("\n")
   }
 
@@ -32,7 +32,7 @@ export async function assistantSnapshot(context: TenantContext) {
       `Person: ${name}`,
       `Organisation: ${context.organisationName}`,
       "The evidence pack is part of the Registered plan. It is not included in this snapshot.",
-      "Worker records and courses stay available.",
+      "Worker records stay available.",
     ].join("\n")
   }
 
@@ -53,11 +53,18 @@ export async function assistantSnapshot(context: TenantContext) {
         `${item.label} — ${packStatusLabel(item.status)} — ${item.detail}`
     )
 
+  const credentialsOnly = pack.scope === "credentials"
   return [
     `Organisation: ${context.organisationName}`,
     `Registration groups: ${context.organisationRegistrationGroups.join(", ") || "none set"}`,
-    `Readiness: ${readiness.met} of ${readiness.total} required items count (${readiness.percent}%).`,
-    areas ? `Open by area: ${areas}.` : "Nothing is still open.",
+    credentialsOnly
+      ? `Worker credentials: ${readiness.met} of ${readiness.total} required items count (${readiness.percent}%). This person cannot see policies, participants, or incidents, so this is not the organisation's audit readiness.`
+      : `Readiness: ${readiness.met} of ${readiness.total} required items count (${readiness.percent}%).`,
+    areas
+      ? `Open by area: ${areas}.`
+      : credentialsOnly
+        ? "No worker credentials are still open."
+        : "Nothing is still open.",
     gaps.length > 0 ? `First open items:\n${gaps.join("\n")}` : "No open items in this snapshot.",
   ].join("\n")
 }

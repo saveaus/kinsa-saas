@@ -9,7 +9,6 @@ import {
 export const recordAreas = [
   "policy",
   "clearance",
-  "course",
   "support_plan",
   "service_agreement",
   "incident",

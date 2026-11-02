@@ -1,4 +1,4 @@
-import { addDays, addMonths, format, parseISO, startOfDay } from "date-fns"
+import { addDays, format, startOfDay } from "date-fns"
 
 export function isReminderDue(
   expiresOn: string,
@@ -10,9 +10,22 @@ export function isReminderDue(
   return expiresOn >= start && expiresOn <= end
 }
 
-export function courseExpiryOn(completedAt: string, renewalMonths: number) {
-  if (renewalMonths <= 0) return null
-  const completed = parseISO(completedAt)
-  if (Number.isNaN(completed.getTime())) return null
-  return format(addMonths(completed, renewalMonths), "yyyy-MM-dd")
+type RenewableDocument = {
+  worker_id: string
+  document_type_version_id: string
+  expires_on: string | null
+}
+
+export function hasRenewal(
+  document: RenewableDocument,
+  others: RenewableDocument[]
+) {
+  return others.some(
+    (other) =>
+      other.worker_id === document.worker_id &&
+      other.document_type_version_id === document.document_type_version_id &&
+      !!other.expires_on &&
+      !!document.expires_on &&
+      other.expires_on > document.expires_on
+  )
 }

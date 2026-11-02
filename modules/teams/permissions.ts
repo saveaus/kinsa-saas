@@ -41,21 +41,6 @@ export const permissionGroups: {
     ],
   },
   {
-    label: "Courses",
-    items: [
-      {
-        permission: "courses.take",
-        label: "Take courses",
-        description: "Complete assigned training.",
-      },
-      {
-        permission: "courses.manage",
-        label: "Manage courses",
-        description: "Change the library, pass marks, and assignments.",
-      },
-    ],
-  },
-  {
     label: "Organisation",
     items: [
       {

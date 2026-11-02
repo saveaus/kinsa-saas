@@ -25,6 +25,9 @@ export async function loadComplianceCount(context: TenantContext, count: number)
 export async function loadComplianceTarget(context: TenantContext, percent: number) {
   const pack = await loadPack(context)
   if (!pack.ok) return pack
+  if (pack.scope === "credentials") {
+    return { ok: false as const, reason: "Organisation-wide evidence is not in this view." }
+  }
   const current = packReadiness(pack.items).percent
   const target = Math.min(100, Math.max(1, Math.round(percent)))
   if (current >= target) {
@@ -46,5 +49,5 @@ async function loadPack(context: TenantContext) {
     getLapsingWindowDays(context),
   ])
   const pack = await loadAuditPack(context, workforce, lapsingWindowDays)
-  return { ok: true as const, items: pack.items }
+  return { ok: true as const, items: pack.items, scope: pack.scope }
 }

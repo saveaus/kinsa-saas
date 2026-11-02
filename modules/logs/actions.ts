@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 
+import { revalidateCompliance } from "@/lib/revalidate-compliance"
+import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
+
 import { createServerSupabase } from "@/lib/supabase/server"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { registeredError } from "@/modules/billing/guard"
@@ -537,3 +540,33 @@ export async function saveLogEntryAction(
   return { message: "Entry saved." }
 }
 
+export async function completeLogEntryAction(
+  entryId: string,
+  done: boolean
+): Promise<LogActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+  if (!hasAdminClient()) return { error: "This entry could not be updated." }
+
+  // Accepted entries are read-only to sessions, so only completion is written here.
+  const { data, error } = await createAdminSupabase()
+    .from("log_entries")
+    .update({
+      completed_at: done ? new Date().toISOString() : null,
+      completed_by: done ? context.userId : null,
+    })
+    .eq("id", entryId)
+    .eq("organisation_id", context.organisationId)
+    .eq("status", "accepted")
+    .select("id, register_id")
+    .maybeSingle()
+  if (error) return { error: error.message }
+  if (!data) return { error: "That entry could not be found." }
+
+  await recordAudit(done ? "log_entry.completed" : "log_entry.reopened", "log_entry", entryId, {})
+  revalidatePath(logFileHref(data.register_id))
+  revalidateCompliance()
+  return { message: done ? "Marked done." : "Reopened." }
+}

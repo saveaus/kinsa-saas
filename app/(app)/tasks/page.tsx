@@ -1,4 +1,4 @@
-import { format } from "date-fns"
+import { todayOn } from "@/lib/today"
 
 import { TasksBoard } from "@/components/tasks-board"
 import { can, requireTenant } from "@/lib/tenant"
@@ -18,7 +18,7 @@ export default async function TasksPage() {
       people={people}
       canAssign={canAssign}
       youId={context.workerId}
-      today={format(new Date(), "yyyy-MM-dd")}
+      today={todayOn()}
     />
   )
 }

@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { personName } from "@/lib/person-name"
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
@@ -20,14 +21,18 @@ export async function listStaffTasks(context: TenantContext) {
   const supabase = await createServerSupabase()
   const [{ data, error }, { data: workers, error: workerError }] =
     await Promise.all([
-      supabase
-        .from("staff_tasks")
-        .select(
-          "id, title, detail, changes, policy_id, status, due_on, assignee_id, created_at"
-        )
-        .eq("organisation_id", context.organisationId)
-        .order("created_at", { ascending: false })
-        .limit(200),
+      // Older open tasks must stay on the board, so this is not capped.
+      fetchAll((from, to) =>
+        supabase
+          .from("staff_tasks")
+          .select(
+            "id, title, detail, changes, policy_id, status, due_on, assignee_id, created_at"
+          )
+          .eq("organisation_id", context.organisationId)
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to)
+      ),
       supabase
         .from("workers")
         .select("id, first_name, last_name")

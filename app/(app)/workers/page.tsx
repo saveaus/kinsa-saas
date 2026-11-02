@@ -93,6 +93,7 @@ export default async function WorkersPage() {
         { id: "percent", label: "Percent" },
       ]}
       rows={rows}
+      spacing="relaxed"
       empty="No workers yet"
       emptyDescription="Drop a staff list in the assistant, or add one worker."
       emptyAction={

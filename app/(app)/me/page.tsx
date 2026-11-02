@@ -35,15 +35,11 @@ export default async function MePage() {
     .select("staff_roles")
     .eq("id", context.workerId)
     .maybeSingle()
-  const scoped = attachRequirementRoles([], types, requirementMaps)
-
   const compliance = computeWorkerCompliance({
     workerId: context.workerId,
     workerRoles: asStaffRoles(profile?.staff_roles),
-    types: scoped.types,
+    types: attachRequirementRoles(types, requirementMaps),
     documents,
-    courses: [],
-    enrolments: [],
     lapsingWindowDays,
   })
 

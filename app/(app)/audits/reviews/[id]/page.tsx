@@ -1,16 +1,14 @@
 import { ClipboardCheck } from "lucide-react"
 import Link from "next/link"
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 
 import { AssistantChat } from "@/components/assistant-chat"
 import { EmptyState } from "@/components/empty-state"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
 import { registrationGroupChoices } from "@/lib/ndis-registration-groups"
-import { can, requireTenant } from "@/lib/tenant"
+import { can, requireTenant, type TenantContext } from "@/lib/tenant"
 import { getAssistantChat } from "@/modules/assistant/chats"
-import { allowsRegistered } from "@/modules/billing/access"
-import { getOrganisationBilling } from "@/modules/billing/queries"
-import { stripeConfigured } from "@/modules/billing/stripe"
 import { loadAssistantUpgrade } from "@/modules/assistant/usage"
 
 export default async function InternalAuditReviewPage({
@@ -18,20 +16,21 @@ export default async function InternalAuditReviewPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
   const { context } = await requireTenant()
+  const wall = await registeredWall(context)
+  if (wall) return wall
+  return <InternalAuditReviewContent context={context} params={params} />
+}
+
+async function InternalAuditReviewContent({
+  context,
+  params,
+}: {
+  context: TenantContext
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
   const manage = can(context, "settings.manage")
-  const billing = await getOrganisationBilling(context.organisationId)
-  if (!allowsRegistered(billing, new Date(), stripeConfigured())) {
-    if (manage) redirect("/settings/billing")
-    return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="Internal audits are unavailable"
-        description="They are part of the Registered plan."
-      />
-    )
-  }
 
   if (!can(context, "workers.read_all")) {
     return (

@@ -1,5 +1,8 @@
 import type { UIMessage } from "ai"
 
+import { policyDocxType as docxMediaType } from "@/modules/policies/attachments"
+import { docxPlainText } from "@/modules/policies/compliance-check"
+
 const excerptLimit = 6000
 const dataUrlLimit = 6_000_000
 export const trialDataUrlLimit = 16_000
@@ -13,6 +16,38 @@ const imageTypes: Record<string, string> = {
   "image/webp": "image/webp",
 }
 
+/** Only images and PDFs reach the model as files. Everything else becomes text or a note. */
+function fileForModel(
+  part: Extract<UIMessage["parts"][number], { type: "file" }>,
+  fileLimit: number
+): UIMessage["parts"] {
+  const name = part.filename?.trim() || "file"
+  const note = (text: string) => [{ type: "text" as const, text: `Attached file ${name} ${text}` }]
+  const tooLarge = note("was too large to read.")
+  // A URL would make the SDK fetch it on the server. The browser only ever sends data URLs.
+  if (!part.url.startsWith("data:")) return note("could not be read.")
+  if (part.url.length > dataUrlLimit) return tooLarge
+
+  const image = imageMediaType(part.mediaType, part.url)
+  if (image) return part.url.length > fileLimit ? tooLarge : [{ ...part, mediaType: image }]
+  if (part.mediaType === "application/pdf" || /\.pdf$/i.test(name)) {
+    return part.url.length > fileLimit ? tooLarge : [{ ...part, mediaType: "application/pdf" }]
+  }
+  if (isDocx(part.mediaType, name)) {
+    const text = docxText(part.url)
+    if (!text) return note("is a Word file that could not be read. Ask for it as a PDF.")
+    return [{ type: "text", text: `Attached file ${name}:\n${text}` }]
+  }
+  if (isOldWord(part.mediaType, name)) {
+    return note("is an old Word .doc file, which cannot be read here. Ask for it to be saved as .docx or PDF and attached again.")
+  }
+  if (isTextFile(part.mediaType, name)) {
+    const excerpt = textExcerpt(name, part.url)
+    return excerpt ? [{ type: "text", text: excerpt }] : note("is empty or could not be read.")
+  }
+  return note("cannot be read here. Images, PDFs, Word .docx files, and text files can be read.")
+}
+
 export function expandAttachmentText(
   messages: UIMessage[],
   textLimit: number,
@@ -22,14 +57,7 @@ export function expandAttachmentText(
     const parts = message.parts.flatMap((part): UIMessage["parts"] => {
       if (part.type === "text") return [{ ...part, text: part.text.slice(0, textLimit) }]
       if (part.type !== "file") return [part]
-      if (part.url.length > fileLimit) {
-        const name = part.filename?.trim() || "A file"
-        return [{ type: "text", text: `Attached file ${name} was too large to read.` }]
-      }
-      const image = imageMediaType(part.mediaType, part.url)
-      if (image) return [{ ...part, mediaType: image }]
-      const excerpt = textExcerpt(part.mediaType, part.filename, part.url)
-      return excerpt ? [part, { type: "text", text: excerpt }] : [part]
+      return fileForModel(part, fileLimit)
     })
     const hasImage = parts.some((part) => part.type === "file" && part.mediaType.startsWith("image/"))
     const hasText = parts.some((part) => part.type === "text" && part.text.trim().length > 0)
@@ -46,14 +74,30 @@ function canonicalImage(mediaType: string) {
   return imageTypes[mediaType.toLowerCase()] ?? null
 }
 
-function textExcerpt(mediaType: string, filename: string | undefined, url: string) {
-  const name = filename?.trim() || "file"
-  if (!isTextFile(mediaType, name)) return null
+function textExcerpt(name: string, url: string) {
   const decoded = decodeDataUrl(url)
   if (!decoded) return null
   const text = decoded.replace(/\u0000/g, "").trim()
   if (!text) return null
   return `Attached file ${name}:\n${text.slice(0, excerptLimit)}`
+}
+
+function isDocx(mediaType: string, name: string) {
+  return /\.docx$/i.test(name) || mediaType === docxMediaType
+}
+
+function isOldWord(mediaType: string, name: string) {
+  return /\.doc$/i.test(name) || mediaType === "application/msword"
+}
+
+function docxText(url: string) {
+  const marker = url.indexOf(",")
+  if (marker < 0 || !url.slice(0, marker).includes("base64")) return null
+  try {
+    return docxPlainText(new Uint8Array(Buffer.from(url.slice(marker + 1), "base64"))) || null
+  } catch {
+    return null
+  }
 }
 
 function isTextFile(mediaType: string, name: string) {

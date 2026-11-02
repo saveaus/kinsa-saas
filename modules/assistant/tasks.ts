@@ -188,6 +188,38 @@ export function authoriseAssistantTask(value: unknown, directory: TaskDirectory)
   }
 }
 
+/** The draft a person previewed, as sent back by their browser. Checked like any other policy input. */
+export function preparePolicyFiling(
+  value: unknown,
+  directory: Pick<TaskDirectory, "organisation" | "standards">
+) {
+  if (!value || typeof value !== "object") {
+    return { filing: false as const, reason: "That policy could not be read." }
+  }
+  const record = value as Record<string, unknown>
+  const draft = parsePolicyDraft({
+    ...(record.draft && typeof record.draft === "object" ? record.draft : {}),
+    organisation: directory.organisation,
+    filed: undefined,
+  })
+  if (!draft) return { filing: false as const, reason: "That policy could not be read." }
+  const revisesPolicyId = typeof record.revisesPolicyId === "string" ? record.revisesPolicyId : null
+  if (revisesPolicyId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(revisesPolicyId)) {
+      return { filing: false as const, reason: "That policy could not be found." }
+    }
+    return { filing: true as const, draft, standardCode: null, revisesPolicyId }
+  }
+  const standard = matchNamed(
+    typeof record.standardCode === "string" ? record.standardCode : "",
+    directory.standards
+  )
+  if (!standard) {
+    return { filing: false as const, reason: "Choose a practice standard that applies to this organisation." }
+  }
+  return { filing: true as const, draft, standardCode: standard.code, revisesPolicyId: null }
+}
+
 export function tasksFromParts(parts: readonly unknown[]) {
   const tasks: AssistantStoredTask[] = []
   for (const part of parts) {

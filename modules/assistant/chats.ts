@@ -4,6 +4,7 @@ import {
   parseStoredMessages,
   type AssistantStoredMessage,
 } from "@/modules/assistant/messages"
+import { applyProposalOutcomes } from "@/modules/assistant/ratings"
 
 export type AssistantChatPurpose = "general" | "internal_audit"
 
@@ -97,6 +98,7 @@ export async function getAssistantChat(context: TenantContext, id: string) {
 
   if (!data) return null
   let interviewAuditId: string | null = null
+  let messages = parseStoredMessages(data.messages)
   if (data.assignment_id) {
     const { data: assignment } = await supabase
       .from("internal_audit_assignments")
@@ -104,11 +106,16 @@ export async function getAssistantChat(context: TenantContext, id: string) {
       .eq("id", data.assignment_id)
       .maybeSingle()
     interviewAuditId = assignment?.audit_id ?? null
+    const { data: proposals } = await supabase
+      .from("internal_audit_rating_proposals")
+      .select("id, used_at, cancelled_at")
+      .eq("assignment_id", data.assignment_id)
+    messages = applyProposalOutcomes(messages, proposals ?? [])
   }
   const chat: AssistantChatRecord = {
     id: data.id,
     title: data.title,
-    messages: parseStoredMessages(data.messages),
+    messages,
     interviewAuditId,
     assignmentId: data.assignment_id,
     purpose: assistantChatPurpose(data.purpose),

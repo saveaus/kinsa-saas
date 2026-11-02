@@ -65,11 +65,7 @@ export function attentionRows(
       .filter((item) => item.status !== "met")
       .map((item) => {
         const href =
-          item.kind === "course"
-            ? `/workers/${worker.id}`
-            : item.status === "pending"
-              ? "/approvals"
-              : `/workers/${worker.id}#upload`
+          item.status === "pending" ? "/approvals" : `/workers/${worker.id}#upload`
         const row: AttentionRow = {
           id: `${worker.id}:${item.key}`,
           bucket: bucketFor(item.status),
@@ -88,13 +84,7 @@ export function attentionRows(
             },
             detail: {
               kind: "text",
-              text:
-                item.kind === "course" &&
-                (item.status === "expired" || item.status === "lapsing")
-                  ? expiryLabel(item.expiresOn, lapsingWindowDays)
-                  : item.kind === "course"
-                    ? "Course not completed"
-                    : expiryLabel(item.expiresOn, lapsingWindowDays),
+              text: expiryLabel(item.expiresOn, lapsingWindowDays),
             },
           },
         }

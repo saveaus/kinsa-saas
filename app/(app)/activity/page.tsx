@@ -1,11 +1,11 @@
 import Link from "next/link"
 
 import { ActivityHeatmap } from "@/components/activity-heatmap"
+import { registeredWall } from "@/components/registered-wall"
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDateTime } from "@/lib/format-date"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import {
   formatActivityDay,
   parseDayKey,
@@ -32,7 +32,8 @@ export default async function ActivityPage({
 }) {
   const { context } = await requireTenant()
   requirePermission(context, "audit.read")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const showAll = params.all === "1"

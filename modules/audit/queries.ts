@@ -160,20 +160,54 @@ export async function listAuditDailyCounts(context: TenantContext, filters: Pick
   return counts
 }
 
+const activityId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function activityIn(targetType: string, ids: string[]) {
+  const safe = ids.filter((id) => activityId.test(id))
+  if (safe.length === 0) return null
+  return `and(target_type.eq.${targetType},target_id.in.(${safe.join(",")}))`
+}
+
+export async function listParticipantActivity(
+  context: TenantContext,
+  participantId: string,
+  related: {
+    recordIds: string[]
+    incidentIds: string[]
+    entryIds: string[]
+    checkIds: string[]
+  },
+  page = 1
+) {
+  const filters = [
+    activityIn("participant", [participantId]),
+    activityIn("participant_record", related.recordIds),
+    activityIn("incident", related.incidentIds),
+    activityIn("log_entry", related.entryIds),
+    activityIn("support_plan_check", related.checkIds),
+  ].filter((filter): filter is string => Boolean(filter))
+  return listScopedActivity(context, filters, page)
+}
+
 export async function listWorkerActivity(
   context: TenantContext,
   workerId: string,
   documentIds: string[],
   page = 1
 ) {
+  const filters = [
+    activityIn("worker", [workerId]),
+    activityIn("document", documentIds),
+  ].filter((filter): filter is string => Boolean(filter))
+  return listScopedActivity(context, filters, page)
+}
+
+async function listScopedActivity(context: TenantContext, filters: string[], page: number) {
   const supabase = await createServerSupabase()
   const pageSize = 50
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1
   const from = (safePage - 1) * pageSize
-  const filters = [`and(target_type.eq.worker,target_id.eq.${workerId})`]
-  if (documentIds.length > 0) {
-    filters.push(`and(target_type.eq.document,target_id.in.(${documentIds.join(",")}))`)
-  }
+  if (filters.length === 0) return { events: [], hasMore: false }
 
   const { data, error } = await supabase
     .from("audit_events")

@@ -1,5 +1,6 @@
 "use server"
 
+import { registeredError } from "@/modules/billing/guard"
 import { format } from "date-fns"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -10,6 +11,7 @@ import { can, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
 import { loadComplianceLift } from "@/modules/tasks/load"
 import { listTaskAssignees } from "@/modules/tasks/queries"
+import { todayOn } from "@/lib/today"
 
 type State = { error?: string; message?: string }
 
@@ -114,7 +116,7 @@ export async function assignAssistantTasks(value: unknown): Promise<State> {
       title: task.title,
       detail: task.detail,
       assigneeId: assignment.assigneeId,
-      dueOn: format(new Date(), "yyyy-MM-dd"),
+      dueOn: todayOn(),
     })
   }
   const saved = await insertStaffTasks(context, rows, "assistant")
@@ -177,6 +179,8 @@ export async function assignPolicyRevision(value: unknown): Promise<State> {
   if (!can(context, "workers.manage")) {
     return { error: "You do not have permission to assign tasks." }
   }
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   const parsed = policyRevisionSchema.safeParse(value)
   if (!parsed.success) return { error: "Those changes could not be assigned." }
   const supabase = await createServerSupabase()

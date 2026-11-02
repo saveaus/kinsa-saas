@@ -14,16 +14,12 @@ import { asStaffRoles } from "@/modules/workforce/roles"
 
 export type TeamActionState = { error?: string; message?: string }
 
-const defaultPermissions: AppPermission[] = [
-  "documents.upload_own",
-  "courses.take",
-]
+const defaultPermissions: AppPermission[] = ["documents.upload_own"]
 
 function refreshTeamSurfaces() {
   revalidatePath("/settings/teams")
   revalidatePath("/settings/permissions")
   revalidatePath("/settings/credentials")
-  revalidatePath("/settings/courses")
   revalidatePath("/workers", "layout")
 }
 
@@ -235,15 +231,9 @@ export async function deleteTeamAction(
     .delete()
     .eq("organisation_id", context.organisationId)
     .eq("staff_role", team.code)
-  const { error: courseError } = await supabase
-    .from("course_role_requirements")
-    .delete()
-    .eq("organisation_id", context.organisationId)
-    .eq("staff_role", team.code)
 
   await recordAudit("team.deleted", "team", team.id, { name: team.name })
   refreshTeamSurfaces()
   if (documentError) return { error: documentError.message }
-  if (courseError) return { error: courseError.message }
   return { message: "Team deleted." }
 }

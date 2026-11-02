@@ -8,6 +8,7 @@ import {
   buildWorkforceCompliance,
   getLapsingWindowDays,
 } from "@/modules/documents/queries"
+import { today as appToday } from "@/lib/today"
 
 export function analyticsWorkers(
   workforce: Awaited<ReturnType<typeof buildWorkforceCompliance>>
@@ -21,7 +22,7 @@ export function analyticsWorkers(
 export function summariseWorkforce(
   workforce: Awaited<ReturnType<typeof buildWorkforceCompliance>>,
   lapsingWindowDays: number,
-  today = new Date()
+  today = appToday()
 ) {
   const workers = analyticsWorkers(workforce)
   const weekCount = horizonWeekCount(lapsingWindowDays)

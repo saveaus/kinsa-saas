@@ -81,6 +81,52 @@ function trialOpen(billing: BillingSnapshot, now: Date) {
   return trialDaysRemaining(billing.trialEndsAt, now) > 0
 }
 
+export function trialHasEnded(billing: BillingSnapshot, now = new Date()) {
+  switch (billing.status) {
+    case "active":
+    case "past_due":
+    case "canceled":
+    case "incomplete":
+    case "paused":
+      return false
+    case "trialing":
+    case null:
+      return !trialOpen(billing, now)
+    default: {
+      const unreachable: never = billing.status
+      return unreachable
+    }
+  }
+}
+
+// Staff features need any live subscription or an open trial. Records stay
+// readable either way; this closes adding and changing them.
+export function allowsStaff(
+  billing: BillingSnapshot,
+  now = new Date(),
+  stripeConfigured = true
+) {
+  if (!stripeConfigured) return true
+
+  switch (billing.status) {
+    case "active":
+      return billing.plan !== null
+    case "past_due":
+    case "canceled":
+    case "incomplete":
+    case "paused":
+      return false
+    case "trialing":
+      return billing.plan !== null || trialOpen(billing, now)
+    case null:
+      return trialOpen(billing, now)
+    default: {
+      const unreachable: never = billing.status
+      return unreachable
+    }
+  }
+}
+
 export function allowsRegistered(
   billing: BillingSnapshot,
   now = new Date(),

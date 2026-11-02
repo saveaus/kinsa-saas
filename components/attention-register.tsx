@@ -13,11 +13,7 @@ import {
   getLapsingWindowDays,
 } from "@/modules/documents/queries"
 
-export async function AttentionRegister({
-  kind,
-}: {
-  kind: "course" | "document"
-}) {
+export async function AttentionRegister() {
   const { context } = await requireTenant()
   if (!can(context, "workers.read_all")) redirect("/me")
 
@@ -25,56 +21,29 @@ export async function AttentionRegister({
     buildWorkforceCompliance(context),
     getLapsingWindowDays(context),
   ])
-  const rows = attentionRows(workforce, lapsingWindowDays).filter(
-    (row) => row.kind === kind
-  )
-  const copy = registerCopy(kind)
+  const rows = attentionRows(workforce, lapsingWindowDays)
 
   return (
     <RecordTable
-      title={copy.title}
+      title="Documents"
       columns={attentionColumns}
       rows={rows}
       empty={
         workforce.length === 0 ? "No workers yet" : "Nothing needs attention"
       }
       emptyDescription={
-        workforce.length === 0 ? copy.emptyWorkers : copy.emptyGaps
+        workforce.length === 0
+          ? "Add a worker, then collect the documents each role needs."
+          : "Document gaps for the workforce show up here."
       }
       actions={
         <Link
-          href={copy.href}
+          href="/workers"
           className={buttonVariants({ size: "sm", variant: "outline" })}
         >
-          {copy.action}
+          All workers
         </Link>
       }
     />
   )
-}
-
-function registerCopy(kind: "course" | "document") {
-  switch (kind) {
-    case "course":
-      return {
-        title: "Courses",
-        href: "/courses",
-        action: "Open library",
-        emptyWorkers: "Add a worker, then assign courses from the library.",
-        emptyGaps: "Course gaps for the workforce show up here.",
-      }
-    case "document":
-      return {
-        title: "Documents",
-        href: "/workers",
-        action: "All workers",
-        emptyWorkers:
-          "Add a worker, then collect the documents each role needs.",
-        emptyGaps: "Document gaps for the workforce show up here.",
-      }
-    default: {
-      const unreachable: never = kind
-      return unreachable
-    }
-  }
 }

@@ -2,6 +2,7 @@ import { ChevronLeft } from "lucide-react"
 import Link from "next/link"
 
 import { AuthBackdrop } from "@/components/auth-backdrop"
+import { KinsaWordmarkLink } from "@/components/kinsa-logo"
 
 export function AuthFrame({
   step,
@@ -11,6 +12,7 @@ export function AuthFrame({
   preview,
   aside,
   onBack,
+  wide = false,
 }: {
   step?: string
   title: string
@@ -19,20 +21,27 @@ export function AuthFrame({
   preview?: React.ReactNode
   aside?: React.ReactNode
   onBack?: () => void
+  wide?: boolean
 }) {
   const showPanel = Boolean(preview)
 
   return (
     <AuthBackdrop>
       <header className="relative z-10 flex justify-center px-6 pt-8">
-        <Link href="/" className="text-[15px] font-semibold tracking-tight">
-          Kinsa
-        </Link>
+        <KinsaWordmarkLink />
       </header>
-      <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center px-4 py-8 sm:px-6">
+      <main
+        className={`relative z-10 mx-auto flex w-full flex-1 px-4 py-8 sm:px-6 ${
+          wide ? "max-w-3xl items-start" : "max-w-5xl items-center"
+        }`}
+      >
         <div
           className={`grid w-full overflow-hidden border bg-card shadow-none ${
-            showPanel ? "md:min-h-[640px] md:grid-cols-[minmax(0,26rem)_1fr]" : "mx-auto max-w-[26rem]"
+            showPanel
+              ? "md:min-h-[640px] md:grid-cols-[minmax(0,26rem)_1fr]"
+              : wide
+                ? "mx-auto max-w-3xl"
+                : "mx-auto max-w-[26rem]"
           }`}
         >
           <div className="flex flex-col justify-center px-8 py-10 sm:px-10">
@@ -43,7 +52,7 @@ export function AuthFrame({
                     type="button"
                     onClick={onBack}
                     aria-label="Back"
-                    className="-ml-1 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="-ml-1 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <ChevronLeft className="size-4" />
                   </button>

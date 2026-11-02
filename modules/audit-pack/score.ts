@@ -29,11 +29,11 @@ import {
 } from "@/modules/participants/standing"
 import type { PolicyRecordStatus } from "@/modules/policies/standing"
 import type { AuditReadiness } from "@/modules/analytics/summary"
+import { today as appToday } from "@/lib/today"
 
 export type PackArea =
   | "policy"
   | "clearance"
-  | "course"
   | "support_plan"
   | "service_agreement"
   | "incident"
@@ -61,6 +61,7 @@ export type PackPolicy = {
   status: PolicyRecordStatus
   reviewOn: string
   acknowledged: boolean
+  flagged?: boolean
 }
 
 export type PackIncident = {
@@ -191,7 +192,6 @@ const AREA_RANK: Record<PackArea, number> = {
   finance: 7,
   other: 8,
   clearance: 9,
-  course: 10,
 }
 
 function recordDate(kind: ParticipantRecordKind, record: DatedParticipantRecord) {
@@ -259,6 +259,12 @@ function scoreAcceptedPolicy(
   const timing = reviewTiming(policy.reviewOn, today, windowDays)
   if (timing === "overdue") {
     return { status: "overdue" as const, detail: "Review overdue" }
+  }
+  if (policy.flagged) {
+    return {
+      status: "unaccepted" as const,
+      detail: "Does not meet the current standard",
+    }
   }
   if (!inUse) {
     return { status: "unaccepted" as const, detail: "Not in use" }
@@ -452,8 +458,6 @@ function workerArea(kind: ComplianceItem["kind"]): PackArea {
   switch (kind) {
     case "document":
       return "clearance"
-    case "course":
-      return "course"
     default: {
       const unreachable: never = kind
       return unreachable
@@ -472,7 +476,7 @@ function workerDetail(item: ComplianceItem) {
     case "pending":
       return "Waiting for acceptance"
     case "missing":
-      return item.kind === "course" ? "Not completed" : "Not on file"
+      return "Not on file"
     default: {
       const unreachable: never = item.status
       return unreachable
@@ -481,7 +485,7 @@ function workerDetail(item: ComplianceItem) {
 }
 
 export function scoreAuditPack(input: AuditPackInput): PackItem[] {
-  const today = input.today ?? new Date()
+  const today = input.today ?? appToday()
   const items: PackItem[] = standardsForGroups(input.registrationGroups).map(
     (standard) => policyItem(standard, input, today)
   )
@@ -532,7 +536,7 @@ export function scoreAuditPack(input: AuditPackInput): PackItem[] {
       key: `log-due:${due.id}`,
       label: due.summary,
       area: "other",
-      status: todayDue ? "missing" : "overdue",
+      status: todayDue ? "lapsing" : "overdue",
       detail: todayDue ? "Due today" : `Due ${format(parseISO(due.dueOn), "d MMM yyyy")}`,
       href: due.href,
     })
@@ -623,8 +627,6 @@ export function packAreaLabel(area: PackArea) {
       return "Policy"
     case "clearance":
       return "Credential"
-    case "course":
-      return "Course"
     case "support_plan":
       return "Support plan"
     case "service_agreement":

@@ -11,6 +11,7 @@ import { createServerSupabase } from "@/lib/supabase/server"
 import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
+import { staffError } from "@/modules/billing/guard"
 import { syncSubscriptionSeats } from "@/modules/billing/stripe"
 import { createInviteToken, hashToken } from "@/modules/identity/token"
 import { sendInviteEmail } from "@/modules/reminders/email"
@@ -29,6 +30,8 @@ export async function createWorkerAction(
 ): Promise<WorkerActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
+  const closed = await staffError(context)
+  if (closed) return { error: closed }
 
   const firstName = String(formData.get("first_name") ?? "").trim()
   const lastName = String(formData.get("last_name") ?? "").trim()
@@ -76,6 +79,8 @@ export async function updateWorkerAction(
 ): Promise<WorkerActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
+  const closed = await staffError(context)
+  if (closed) return { error: closed }
 
   const allowed = await listTeamCodes(context)
   const staffRoles = parseStaffRoles(formData).filter((role) =>
@@ -134,19 +139,36 @@ export async function deleteWorkerAction(
 
   if (existing.user_id) {
     if (!hasAdminClient()) return { error: "The login could not be removed." }
+    if (existing.user_id === context.userId) {
+      return { error: "You cannot remove your own login." }
+    }
     const admin = createAdminSupabase()
-    const { error: membershipError } = await admin
+    // Banning is global, so only remove a login this organisation really holds.
+    const { data: membership, error: lookupError } = await admin
       .from("memberships")
-      .delete()
+      .select("role")
       .eq("user_id", existing.user_id)
       .eq("organisation_id", context.organisationId)
-    if (membershipError) return { error: membershipError.message }
+      .maybeSingle()
+    if (lookupError) return { error: lookupError.message }
+    if (membership?.role === "admin") {
+      return { error: "An administrator's login cannot be removed here." }
+    }
 
-    const banned = await admin.auth.admin.updateUserById(existing.user_id, {
-      ban_duration: "876000h",
-    })
-    if (banned.error && banned.error.status !== 404) return { error: banned.error.message }
-    await admin.auth.admin.deleteUser(existing.user_id)
+    if (membership) {
+      const { error: membershipError } = await admin
+        .from("memberships")
+        .delete()
+        .eq("user_id", existing.user_id)
+        .eq("organisation_id", context.organisationId)
+      if (membershipError) return { error: membershipError.message }
+
+      const banned = await admin.auth.admin.updateUserById(existing.user_id, {
+        ban_duration: "876000h",
+      })
+      if (banned.error && banned.error.status !== 404) return { error: banned.error.message }
+      await admin.auth.admin.deleteUser(existing.user_id)
+    }
   }
 
   const { data: docs } = await supabase
@@ -163,11 +185,6 @@ export async function deleteWorkerAction(
 
   await supabase
     .from("documents")
-    .delete()
-    .eq("worker_id", workerId)
-    .eq("organisation_id", context.organisationId)
-  await supabase
-    .from("enrolments")
     .delete()
     .eq("worker_id", workerId)
     .eq("organisation_id", context.organisationId)
@@ -208,6 +225,8 @@ export async function inviteWorkerAction(
 ): Promise<WorkerActionState> {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
+  const closed = await staffError(context)
+  if (closed) return { error: closed }
   await assertRateLimit(
     `invite-send:${context.organisationId}:${context.userId}`,
     20,

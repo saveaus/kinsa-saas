@@ -6,15 +6,21 @@ import { redirect } from "next/navigation"
 import { findCriterion } from "@/lib/audit-catalogue"
 import { formatDate } from "@/lib/format-date"
 import { practiceStandardName } from "@/lib/ndis-practice-standards"
+import { createAdminSupabase, hasAdminClient } from "@/lib/supabase/admin"
 import { createServerSupabase } from "@/lib/supabase/server"
 import { can, requireTenant } from "@/lib/tenant"
 import { recordAudit } from "@/modules/audit/write"
 import { cleanChatTitle, storedMessagesJson } from "@/modules/assistant/messages"
 import { allowsRegistered } from "@/modules/billing/access"
+import { registeredError } from "@/modules/billing/guard"
 import { getOrganisationBilling } from "@/modules/billing/queries"
 import { stripeConfigured } from "@/modules/billing/stripe"
 import { interviewWelcome } from "@/modules/internal-audits/prompt"
-import { writeAssessment } from "@/modules/internal-audits/rate"
+import {
+  applyRatingProposal,
+  cancelRatingProposal,
+  writeAssessment,
+} from "@/modules/internal-audits/rate"
 import { isAuditRating } from "@/modules/internal-audits/rating"
 
 type ActionState = { error?: string; message?: string }
@@ -158,7 +164,7 @@ export async function setAuditRatingAction(assignmentId: string, rating: string)
   if (!isAuditRating(rating)) return { error: "Choose a rating." }
   const { context, open } = await auditsOpen()
   if (!open) return { error: "Internal audits are part of the Registered plan." }
-  return writeAssessment(context, assignmentId, { rating, source: "admin" })
+  return writeAssessment(context, assignmentId, rating)
 }
 
 export async function startAuditInterview(assignmentId: string) {
@@ -195,7 +201,9 @@ export async function startAuditInterview(assignmentId: string) {
     category: "Practice standards",
   }
   const title = cleanChatTitle(criterion.name) || "Internal audit"
-  const { data: chat, error } = await supabase
+  // Interview transcripts are written by the server, never with the person's own session.
+  if (!hasAdminClient()) return { error: "The interview could not be started." }
+  const { data: chat, error } = await createAdminSupabase()
     .from("assistant_chats")
     .insert({
       organisation_id: context.organisationId,
@@ -212,6 +220,14 @@ export async function startAuditInterview(assignmentId: string) {
     })
     .select("id")
     .single()
+  if (error?.code === "23505") {
+    const { data: started } = await supabase
+      .from("assistant_chats")
+      .select("id")
+      .eq("assignment_id", assignment.id)
+      .maybeSingle()
+    if (started) redirect(`/assistant/${started.id}`)
+  }
   if (error || !chat) return { error: "The interview could not be started." }
 
   revalidatePath("/assistant", "layout")
@@ -219,19 +235,25 @@ export async function startAuditInterview(assignmentId: string) {
   redirect(`/assistant/${chat.id}`)
 }
 
+/** Accepts only the id of a proposal the server minted during the interview. */
 export async function confirmInterviewRating(value: unknown): Promise<ActionState> {
   const { context } = await requireTenant()
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
   if (!value || typeof value !== "object") return { error: "That rating could not be read." }
-  const record = value as Record<string, unknown>
-  if (!isAuditRating(record.rating) || typeof record.summary !== "string") {
-    return { error: "That rating could not be read." }
+  const proposalId = (value as Record<string, unknown>).proposalId
+  if (typeof proposalId !== "string") {
+    return { error: "That rating has expired. Ask the assistant to propose it again." }
   }
-  if (typeof record.assignmentId !== "string") return { error: "That interview could not be found." }
-  const result = await writeAssessment(context, record.assignmentId, {
-    rating: record.rating,
-    source: "assistant",
-    summary: record.summary,
-  })
+  const result = await applyRatingProposal(context, proposalId)
   if (result.error) return { error: result.error }
   return { message: "Saved. The rating is on the internal audit." }
+}
+
+export async function cancelInterviewRating(value: unknown): Promise<ActionState> {
+  const { context } = await requireTenant()
+  if (!value || typeof value !== "object") return { error: "That rating could not be read." }
+  const proposalId = (value as Record<string, unknown>).proposalId
+  if (typeof proposalId !== "string") return {}
+  return cancelRatingProposal(context, proposalId)
 }

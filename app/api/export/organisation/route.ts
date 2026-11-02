@@ -8,6 +8,7 @@ import {
   buildWorkforceCompliance,
   getLapsingWindowDays,
 } from "@/modules/documents/queries"
+import { loadOrganisationEvidence } from "@/modules/reports/dossier"
 import { organisationCsv } from "@/modules/reports/export"
 import { organisationPdf } from "@/modules/reports/pdf"
 
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     getLapsingWindowDays(context),
   ])
   const pack = await loadAuditPack(context, rows, lapsingWindowDays)
+  const evidence = await loadOrganisationEvidence(context, rows, pack.items, pack.scope)
   const format = new URL(request.url).searchParams.get("format")
   await recordAudit("report.exported", "organisation", context.organisationId, {
     scope: "organisation",
@@ -28,11 +30,7 @@ export async function GET(request: Request) {
 
   const stem = `kinsa-compliance-evidence-${context.organisationId.slice(0, 8)}`
   if (format === "pdf") {
-    const buffer = await organisationPdf(
-      context.organisationName,
-      rows,
-      pack.items
-    )
+    const buffer = await organisationPdf(evidence)
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -41,7 +39,7 @@ export async function GET(request: Request) {
     })
   }
 
-  return new NextResponse(organisationCsv(rows, pack.items), {
+  return new NextResponse(organisationCsv(evidence), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${stem}.csv"`,

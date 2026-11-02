@@ -39,18 +39,23 @@ export function ReviewActions({
 }) {
   const [value, setValue] = useState(status)
   const [error, setError] = useState<string | null>(null)
+  const [needsExpiry, setNeedsExpiry] = useState(false)
+  const [expiresOn, setExpiresOn] = useState("")
   const [pending, startTransition] = useTransition()
 
-  function choose(next: DocumentApprovalStatus) {
-    if (pending || next === value) return
+  function choose(next: DocumentApprovalStatus, expiry?: string) {
+    if (pending || (next === value && !expiry)) return
     const previous = value
     setValue(next)
     setError(null)
     startTransition(async () => {
-      const result = await reviewDocumentAction(documentId, next)
+      const result = await reviewDocumentAction(documentId, next, expiry)
       if (result.error) {
         setValue(previous)
         setError(result.error)
+        setNeedsExpiry(Boolean(result.needsExpiry))
+      } else {
+        setNeedsExpiry(false)
       }
     })
   }
@@ -81,6 +86,25 @@ export function ReviewActions({
         </DropdownMenuContent>
       </DropdownMenu>
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      {needsExpiry ? (
+        <span className="inline-flex items-center gap-1">
+          <input
+            type="date"
+            aria-label="Expiry date"
+            value={expiresOn}
+            onChange={(event) => setExpiresOn(event.target.value)}
+            className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
+          />
+          <button
+            type="button"
+            disabled={pending || !expiresOn}
+            onClick={() => choose("approved", expiresOn)}
+            className="h-7 rounded-md border border-input px-2 text-xs disabled:opacity-60"
+          >
+            Approve
+          </button>
+        </span>
+      ) : null}
     </span>
   )
 }

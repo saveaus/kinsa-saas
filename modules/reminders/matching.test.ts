@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { courseExpiryOn, isReminderDue } from "@/modules/reminders/matching"
+import {
+  hasRenewal,
+  isReminderDue,
+} from "@/modules/reminders/matching"
 
 const today = new Date(2026, 9, 3)
 
@@ -18,9 +21,22 @@ test("a same-day follow-up is only due on the expiry date", () => {
   assert.equal(isReminderDue("2026-10-04", today, 0), false)
 })
 
-test("a course expiry is the completion date plus the renewal", () => {
-  const completed = new Date(2026, 0, 15, 12, 0, 0)
-  assert.equal(courseExpiryOn(completed.toISOString(), 12), "2027-01-15")
-  assert.equal(courseExpiryOn(completed.toISOString(), 0), null)
-  assert.equal(courseExpiryOn("not-a-date", 12), null)
+test("a document with a later copy of the same type is already renewed", () => {
+  const document = {
+    worker_id: "w1",
+    document_type_version_id: "t1",
+    expires_on: "2026-11-10",
+  }
+  assert.equal(
+    hasRenewal(document, [{ ...document, expires_on: "2027-11-10" }]),
+    true
+  )
+  assert.equal(hasRenewal(document, [document]), false)
+  assert.equal(
+    hasRenewal(document, [
+      { ...document, worker_id: "w2", expires_on: "2027-11-10" },
+      { ...document, document_type_version_id: "t2", expires_on: "2027-11-10" },
+    ]),
+    false
+  )
 })

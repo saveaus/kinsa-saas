@@ -195,7 +195,7 @@ export function BillingSettings({
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-[#f5a524]"
+              className="h-full rounded-full bg-[#d4cfc9]"
               style={{ width: `${seatPercent}%` }}
             />
           </div>
@@ -214,7 +214,7 @@ export function BillingSettings({
           {assistantMeter.percent !== null ? (
             <div className="h-1 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-[#f5a524]"
+                className="h-full rounded-full bg-[#d4cfc9]"
                 style={{ width: `${assistantMeter.percent}%` }}
               />
             </div>

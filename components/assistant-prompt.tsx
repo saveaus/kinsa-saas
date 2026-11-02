@@ -56,7 +56,7 @@ export function AssistantPrompt({ suggestions }: { suggestions: string[] }) {
           <button
             key={suggestion}
             type="button"
-            className="inline-flex items-center rounded-md border-0 bg-[#F1F2F4] px-2 py-1 text-xs font-medium text-[#5E6570] shadow-none hover:bg-[#E6E8EB] dark:bg-[#32363C] dark:text-[#C8CDD4] dark:hover:bg-[#3A3F46]"
+            className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
             onClick={() => start(suggestion)}
           >
             {suggestion}

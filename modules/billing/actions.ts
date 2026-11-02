@@ -11,6 +11,7 @@ import {
 } from "@/modules/billing/queries"
 import {
   checkoutUrl,
+  hasLiveSubscription,
   portalUrl,
   stripeConfigured,
 } from "@/modules/billing/stripe"
@@ -31,10 +32,23 @@ export async function startCheckoutAction(
   if (!isBillingPlan(plan)) return { error: "Choose a plan." }
 
   const billing = await getOrganisationBilling(context.organisationId)
-  if (billing.stripeSubscriptionId) {
+  if (billing.stripeSubscriptionId && billing.status !== "canceled") {
     if (!billing.stripeCustomerId) {
       return { error: "This subscription has no Stripe customer yet." }
     }
+    redirect(
+      await portalUrl({
+        customerId: billing.stripeCustomerId,
+        origin: await requestAppUrl(),
+      })
+    )
+  }
+
+  // The webhook may not have landed yet, so ask Stripe before charging twice.
+  if (
+    billing.stripeCustomerId &&
+    (await hasLiveSubscription(billing.stripeCustomerId))
+  ) {
     redirect(
       await portalUrl({
         customerId: billing.stripeCustomerId,

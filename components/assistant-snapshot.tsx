@@ -31,7 +31,7 @@ function StepButtons({
         <button
           key={action.label}
           type="button"
-          className="rounded-full border bg-background px-3 py-1 text-[13px] hover:bg-muted"
+          className="rounded-full border border-border bg-background px-3 py-1 text-[13px] text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
           onClick={() => onAsk(action.ask)}
         >
           {action.label}

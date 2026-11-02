@@ -28,7 +28,7 @@ import { AssistantAssignCard } from "@/components/assistant-assign"
 import { PolicyComplianceChoice } from "@/components/policy-compliance-choice"
 import { AssistantTaskCard } from "@/components/assistant-task"
 import { AuditChoice } from "@/components/audit-choice"
-import { RotatingSuggestions } from "@/components/rotating-suggestions"
+import { AssistantSuggestions } from "@/components/assistant-suggestions"
 import { AuditFindingCard } from "@/components/audit-finding"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -36,26 +36,53 @@ import {
   acceptAttachments,
   attachmentByteLimit,
   attachmentCountLimit,
+  certificateBatchSize,
+  certificateTooLarge,
+  isOldWordFile,
   isPastedTextName,
   pasteAsAttachment,
   pastedTextName,
 } from "@/modules/assistant/attachments"
-import { confirmInterviewRating } from "@/modules/internal-audits/actions"
+import {
+  cancelInterviewRating,
+  confirmInterviewRating,
+} from "@/modules/internal-audits/actions"
 import {
   auditSelectionPrefix,
   findingsFromParts,
   proposedFindingsFromParts,
 } from "@/modules/internal-audits/conduct"
 import type { AssistantUpgrade } from "@/modules/assistant/allowance"
-import { policyDraftsFromParts } from "@/modules/assistant/policy"
+import type { AssistantPolicyDraft } from "@/modules/assistant/policy"
+import {
+  policyDraftsFromParts,
+  policyFilingKey,
+  policyRevisionPrompt,
+  policyRevisionTarget,
+} from "@/modules/assistant/policy"
+import {
+  assistantHistoryLimit,
+  interviewHistoryLimit,
+} from "@/modules/assistant/model"
+import {
+  interviewRequest,
+  requestWindow,
+} from "@/modules/assistant/request-window"
 import { messageText, policyFlagId } from "@/modules/policies/flag-prompt"
-import { ratingsFromParts } from "@/modules/assistant/ratings"
+import {
+  ratingCancelledResult,
+  ratingSavedResult,
+  ratingsFromParts,
+} from "@/modules/assistant/ratings"
 import { recordCardsFromParts } from "@/modules/assistant/records"
 import {
   snapshotPending,
   snapshotsFromParts,
 } from "@/modules/assistant/snapshots"
-import { confirmAssistantTask } from "@/modules/assistant/task-actions"
+import {
+  confirmAssistantTask,
+  fileAssistantPolicy,
+} from "@/modules/assistant/task-actions"
 import {
   assignmentsFromParts,
   type AssignmentOutcome,
@@ -96,7 +123,7 @@ const interviewSuggestions = [
 
 const auditSuggestions = [
   "Start with the biggest gap",
-  "Review worker screening and training",
+  "Review worker screening and documents",
   "Review incidents from report to close",
   "Review how complaints are handled",
 ]
@@ -122,6 +149,19 @@ type PendingImport =
       types: { id: string; name: string }[]
     }
 
+/**
+ * What was on screen when a new chat moved to its own page. Moving remounts this
+ * component, and what someone typed while the page loaded should not disappear.
+ */
+let carried: { id: string; input: string; done: string | null } | null = null
+
+function takeCarried(id: string | undefined) {
+  if (!id || carried?.id !== id) return null
+  const taken = carried
+  carried = null
+  return taken
+}
+
 export function AssistantChat({
   chat,
   mode,
@@ -131,6 +171,7 @@ export function AssistantChat({
   starter,
   policyFlag = null,
   canAssign = false,
+  policyStandards = [],
   upgrade = null,
 }: {
   chat?: {
@@ -153,9 +194,10 @@ export function AssistantChat({
     prompt: string
   } | null
   canAssign?: boolean
+  policyStandards?: { code: string; name: string }[]
   upgrade?: AssistantUpgrade | null
 }) {
-  const interview = Boolean(chat?.interviewAuditId)
+  const interview = Boolean(chat?.interviewAuditId || chat?.assignmentId)
   const audit =
     !interview &&
     (mode === "internal_audit" || chat?.purpose === "internal_audit")
@@ -168,10 +210,13 @@ export function AssistantChat({
       : suggestions
   const router = useRouter()
   const pathname = usePathname()
-  const [input, setInput] = useState(starter ?? "")
+  const [restored] = useState(() => takeCarried(chat?.id))
+  const [input, setInput] = useState(restored?.input ?? starter ?? "")
   const [notice, setNotice] = useState<string | null>(null)
-  const [done, setDone] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(restored?.done ?? null)
   const [importing, setImporting] = useState(false)
+  const [reading, setReading] = useState(false)
+  const [newChatId, setNewChatId] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingImport | null>(null)
   const [attachments, setAttachments] = useState<ComposerFile[]>([])
   const [outcomes, setOutcomes] = useState<
@@ -186,11 +231,13 @@ export function AssistantChat({
   const [ratingOutcomes, setRatingOutcomes] = useState<
     Record<string, { status: "done" | "cancelled"; result: string }>
   >({})
+  const [policyFilings, setPolicyFilings] = useState<Record<string, string>>({})
   const imports = canImport && !interview && !audit
   const outcomesRef = useRef(outcomes)
   const assignmentRef = useRef(assignmentOutcomes)
   const findingRef = useRef(findingOutcomes)
   const ratingRef = useRef(ratingOutcomes)
+  const policyFilingRef = useRef(policyFilings)
   const previousRef = useRef<AssistantStoredMessage[]>(chat?.messages ?? [])
   const messagesRef = useRef<UIMessage[]>([])
   const attachmentsRef = useRef(attachments)
@@ -198,6 +245,7 @@ export function AssistantChat({
   assignmentRef.current = assignmentOutcomes
   findingRef.current = findingOutcomes
   ratingRef.current = ratingOutcomes
+  policyFilingRef.current = policyFilings
   attachmentsRef.current = attachments
   const chatId = chat?.id
   const transport = useMemo(
@@ -208,8 +256,24 @@ export function AssistantChat({
           ...(chatId ? { chatId } : {}),
           ...(audit ? { mode: "internal_audit" } : {}),
         },
+        // The server only reads this window, and old file data can exceed Vercel's request limit.
+        prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
+          body: {
+            ...body,
+            id,
+            trigger,
+            messageId,
+            messages: interview
+              ? interviewRequest(messages)
+              : requestWindow(messages, {
+                  limit: audit ? interviewHistoryLimit : assistantHistoryLimit,
+                  // The audit's chosen registration groups are in the first message.
+                  keepFirstUser: audit,
+                }),
+          },
+        }),
       }),
-    [audit, chatId]
+    [audit, chatId, interview]
   )
   const savedId = useRef<string | null>(chat?.id ?? null)
   const persistChain = useRef(Promise.resolve())
@@ -228,36 +292,45 @@ export function AssistantChat({
         findings: findingRef.current,
         ratings: ratingRef.current,
         assignments: assignmentRef.current,
+        policies: policyFilingRef.current,
       }
     )
     previousRef.current = stored
+    // The server writes an interview's transcript. Nothing here can change it.
+    if (interview) return
     persistChain.current = persistChain.current
       .catch(() => undefined)
       .then(async () => {
-        const existingId = savedId.current
-        if (existingId) {
-          const result = await updateAssistantChatMessages(existingId, stored)
+        try {
+          const existingId = savedId.current
+          if (existingId) {
+            const result = await updateAssistantChatMessages(existingId, stored)
+            if (result.error || !result.id) {
+              persistFailed.current = true
+              setNotice(result.error ?? "The chat could not be saved.")
+              return
+            }
+            persistFailed.current = false
+            if (hasChat.current) router.refresh()
+            return
+          }
+          const result = await saveAssistantChat(
+            stored,
+            auditRef.current ? { purpose: "internal_audit" } : undefined
+          )
           if (result.error || !result.id) {
             persistFailed.current = true
             setNotice(result.error ?? "The chat could not be saved.")
             return
           }
+          savedId.current = result.id
           persistFailed.current = false
-          if (hasChat.current) router.refresh()
-          return
-        }
-        const result = await saveAssistantChat(
-          stored,
-          auditRef.current ? { purpose: "internal_audit" } : undefined
-        )
-        if (result.error || !result.id) {
+          if (!auditRef.current) setNewChatId(result.id)
+        } catch (caught) {
+          console.error(caught)
           persistFailed.current = true
-          setNotice(result.error ?? "The chat could not be saved.")
-          return
+          setNotice("The chat could not be saved.")
         }
-        savedId.current = result.id
-        persistFailed.current = false
-        if (!auditRef.current) router.replace(`/assistant/${result.id}`)
       })
   }
   useEffect(() => {
@@ -286,7 +359,7 @@ export function AssistantChat({
     if (upgrade || !policyFlag || chat || messages.length > 0) return
     let cancel = false
     void (async () => {
-      const file = await loadPolicyFile(policyFlag)
+      const file = await loadPolicyFile(policyFlag).catch(() => null)
       if (cancel) return
       if (file)
         void sendMessage({ text: policyFlag.prompt, files: toFileList([file]) })
@@ -337,8 +410,28 @@ export function AssistantChat({
         snapshotsFromParts(liveReply.parts).length > 0)
     )
 
+  // Moving a new chat to its own page remounts this component, which would drop an
+  // import card and its files, attached files, and anything typed. So it waits.
+  const holdNavigation =
+    busy ||
+    importing ||
+    reading ||
+    Boolean(pending) ||
+    attachments.length > 0 ||
+    input.trim().length > 0
+
   useEffect(() => {
-    if (chat || !audit || busy) return
+    if (!newChatId || chat || holdNavigation) return
+    if (pathname !== "/assistant") return
+    router.replace(`/assistant/${newChatId}`)
+  }, [chat, holdNavigation, newChatId, pathname, router])
+
+  useEffect(() => {
+    if (newChatId && !chat) carried = { id: newChatId, input, done }
+  }, [chat, done, input, newChatId])
+
+  useEffect(() => {
+    if (chat || !audit || busy || holdNavigation) return
     let cancel = false
     void persistChain.current.then(() => {
       if (cancel || persistFailed.current) return
@@ -349,7 +442,7 @@ export function AssistantChat({
     return () => {
       cancel = true
     }
-  }, [audit, busy, chat, messages, router])
+  }, [audit, busy, chat, holdNavigation, messages, router])
 
   const started = messages.length > 0
 
@@ -370,6 +463,13 @@ export function AssistantChat({
     setInput("")
     setNotice(null)
     void sendMessage({ text: trimmed })
+  }
+
+  /** Says something for the person, such as an import note, and leaves what they typed alone. */
+  function tell(text: string) {
+    if (busy || upgrade) return
+    setNotice(null)
+    void sendMessage({ text })
   }
 
   function submit(text: string) {
@@ -439,8 +539,11 @@ export function AssistantChat({
     addAttachments(files)
   }
 
-  async function confirmTask(task: AssistantStoredTask) {
-    const result = await confirmAssistantTask(task)
+  async function confirmTask(
+    task: AssistantStoredTask,
+    revisesPolicyId: string | null
+  ) {
+    const result = await confirmAssistantTask(task, { revisesPolicyId })
     if (result.error) return result
     const outcome: AssistantTaskOutcome = {
       status: "done",
@@ -448,6 +551,27 @@ export function AssistantChat({
     }
     outcomesRef.current = { ...outcomesRef.current, [task.id]: outcome }
     setOutcomes(outcomesRef.current)
+    persistRef.current(messagesRef.current)
+    return result
+  }
+
+  async function filePolicy(
+    messageId: string,
+    draft: AssistantPolicyDraft,
+    standardCode: string | null,
+    revisesPolicyId: string | null
+  ) {
+    const result = await fileAssistantPolicy({
+      draft,
+      standardCode,
+      revisesPolicyId,
+    })
+    if (result.error) return result
+    policyFilingRef.current = {
+      ...policyFilingRef.current,
+      [policyFilingKey(messageId, draft.filename)]: result.message ?? "Filed.",
+    }
+    setPolicyFilings(policyFilingRef.current)
     persistRef.current(messagesRef.current)
     return result
   }
@@ -486,7 +610,7 @@ export function AssistantChat({
         type: type?.name ?? null,
       }
     })
-    if (announce) ask(certificateCheckMessage(described))
+    if (announce) tell(certificateCheckMessage(described))
   }
 
   async function receiveFiles(list: File[], options?: { announce?: boolean }) {
@@ -496,6 +620,7 @@ export function AssistantChat({
       setNotice("Wait for the reply, then drop the file.")
       return
     }
+    setReading(true)
     try {
       const spreadsheets = list.filter((file) => /\.xlsx?$/i.test(file.name))
       const rosters = list.filter(
@@ -506,7 +631,7 @@ export function AssistantChat({
       )
       const tooBig = list.filter(
         (file) =>
-          /\.(pdf|png|jpe?g)$/i.test(file.name) && file.size > 10 * 1024 * 1024
+          /\.(pdf|png|jpe?g)$/i.test(file.name) && certificateTooLarge(file.size)
       )
       const evidence = list
         .filter(
@@ -514,14 +639,14 @@ export function AssistantChat({
             /\.(pdf|png|jpe?g)$/i.test(file.name) &&
             !file.name.startsWith(".") &&
             file.size > 0 &&
-            file.size <= 10 * 1024 * 1024
+            !certificateTooLarge(file.size)
         )
         .slice(0, 80)
       const warning =
         tooBig.length > 0
           ? tooBig.length === 1
-            ? `${tooBig[0]?.name ?? "A file"} is over 10 MB.`
-            : `${tooBig.length} files are over 10 MB.`
+            ? `${tooBig[0]?.name ?? "A file"} is over 4 MB, so it cannot be filed here. Make it smaller and add it again.`
+            : `${tooBig.length} files are over 4 MB, so they cannot be filed here. Make them smaller and add them again.`
           : spreadsheets.length > 0 &&
               rosters.length === 0 &&
               notes.length === 0
@@ -550,7 +675,7 @@ export function AssistantChat({
             heldCertificates: evidence,
           })
           if (announce) {
-            ask(
+            tell(
               staffCheckMessage(
                 preview.people.map((person) => ({
                   firstName: person.firstName,
@@ -576,6 +701,8 @@ export function AssistantChat({
     } catch (error) {
       console.error(error)
       setNotice("That file could not be read.")
+    } finally {
+      setReading(false)
     }
   }
 
@@ -605,7 +732,7 @@ export function AssistantChat({
           await openCertificates(held)
           return
         }
-        ask("The staff list is added.")
+        tell("The staff list is added.")
         return
       }
       let filed = 0
@@ -613,7 +740,17 @@ export function AssistantChat({
       let remaining = pending.files
       try {
         while (remaining.length > 0) {
-          const group = remaining.slice(0, 12)
+          const size = certificateBatchSize(
+            remaining.map((item) => item.file.size)
+          )
+          if (size === 0) {
+            setPending({ ...pending, files: remaining })
+            setNotice(
+              `${remaining[0]?.file.name ?? "A file"} is too large to file here. Make it smaller and add it again.`
+            )
+            return
+          }
+          const group = remaining.slice(0, size)
           const data = new FormData()
           for (const item of group) {
             data.append("file", item.file)
@@ -656,7 +793,7 @@ export function AssistantChat({
       const missed =
         failed.length > 0 ? ` ${failed.length} could not be saved.` : ""
       setDone(`${count}${missed} The assistant checks the ones it can read.`)
-      ask("The certificates are filed.")
+      tell("The certificates are filed.")
     } catch (error) {
       console.error(error)
       setNotice("Those records could not be added.")
@@ -747,7 +884,7 @@ export function AssistantChat({
       ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {started ? (
-          <ul className="mx-auto grid w-full max-w-3xl gap-6 px-4 py-6">
+          <ul className="mx-auto grid w-full max-w-3xl gap-8 px-4 py-8">
             {messages.map((message, index) => {
               const live =
                 busy &&
@@ -869,13 +1006,23 @@ export function AssistantChat({
                 .slice(index + 1)
                 .some((item) => item.role === "user")
               const showText = text.length > 0 && text !== caption
+              const revision =
+                policies.length > 0 || tasks.length > 0
+                  ? policyRevisionTarget(
+                      messages.map((item) => ({
+                        role: item.role,
+                        text: messageText(item.parts),
+                      })),
+                      index
+                    )
+                  : null
               return (
                 <li
                   key={message.id}
                   className={
                     message.role === "user"
                       ? "ml-auto grid max-w-[min(100%,32rem)] justify-items-end gap-2"
-                      : "max-w-3xl text-[15px] leading-7"
+                      : "max-w-3xl text-[15px] leading-7 text-foreground"
                   }
                 >
                   <AssistantImagePreviews items={chips} />
@@ -890,7 +1037,7 @@ export function AssistantChat({
                   ) : null}
                   {showText ? (
                     message.role === "user" ? (
-                      <div className="rounded-3xl bg-muted px-4 py-2.5 text-sm">
+                      <div className="rounded-2xl bg-secondary px-3.5 py-2 text-[15px] leading-6">
                         <p className="whitespace-pre-wrap">{text}</p>
                       </div>
                     ) : (
@@ -954,18 +1101,14 @@ export function AssistantChat({
                       result={item.result}
                       onConfirm={async () => {
                         const result = await confirmInterviewRating({
-                          rating: item.rating,
-                          summary: item.summary,
-                          assignmentId: chat?.assignmentId,
+                          proposalId: item.proposalId,
                         })
                         if (result.error) return { error: result.error }
                         const next = {
                           ...ratingRef.current,
                           [item.id]: {
                             status: "done" as const,
-                            result:
-                              result.message ??
-                              "Saved. The rating is on the internal audit.",
+                            result: result.message ?? ratingSavedResult,
                           },
                         }
                         ratingRef.current = next
@@ -978,12 +1121,17 @@ export function AssistantChat({
                           ...ratingRef.current,
                           [item.id]: {
                             status: "cancelled" as const,
-                            result: "Cancelled. Nothing was saved.",
+                            result: ratingCancelledResult,
                           },
                         }
                         ratingRef.current = next
                         setRatingOutcomes(next)
                         persistRef.current(messagesRef.current)
+                        void cancelInterviewRating({
+                          proposalId: item.proposalId,
+                        }).catch((caught: unknown) => {
+                          console.error(caught)
+                        })
                       }}
                     />
                   ))}
@@ -1008,7 +1156,24 @@ export function AssistantChat({
                     <AssistantPolicyCard
                       key={policy.filename}
                       draft={policy}
-                      onFile={ask}
+                      standards={policyStandards}
+                      revision={revision}
+                      filed={
+                        policyFilings[
+                          policyFilingKey(message.id, policy.filename)
+                        ] ?? policy.filed
+                      }
+                      onFile={
+                        policyStandards.length > 0
+                          ? (standardCode) =>
+                              filePolicy(
+                                message.id,
+                                policy,
+                                standardCode,
+                                revision?.policyId ?? null
+                              )
+                          : undefined
+                      }
                     />
                   ))}
                   {live
@@ -1018,7 +1183,9 @@ export function AssistantChat({
                           key={task.id}
                           task={task}
                           outcome={outcomes[task.id]}
-                          onConfirm={confirmTask}
+                          onConfirm={(item) =>
+                            confirmTask(item, revision?.policyId ?? null)
+                          }
                           onCancel={cancelTask}
                         />
                       ))}
@@ -1027,11 +1194,7 @@ export function AssistantChat({
                       policyId={flaggedId}
                       changes={text.slice(0, 2000)}
                       canAssign={canAssign}
-                      onImplement={() =>
-                        ask(
-                          "Implement these changes in a revised policy for the same practice standard. Draft the full policy."
-                        )
-                      }
+                      onImplement={() => ask(policyRevisionPrompt)}
                     />
                   ) : null}
                   {assignments.map((assignment) => (
@@ -1069,7 +1232,7 @@ export function AssistantChat({
                 <p className="text-sm text-destructive">{error.message}</p>
                 <button
                   type="button"
-                  className="rounded-full border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-sm text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
                   onClick={() => {
                     clearError()
                     void regenerate()
@@ -1113,7 +1276,8 @@ export function AssistantChat({
                   input={input}
                   setInput={setInput}
                   busy={busy}
-                  placeholder={composerPlaceholder(interview, audit, imports)}
+                  roomy
+                  placeholder={composerPlaceholder(interview, audit, imports, false)}
                   attachments={composerChips(attachments)}
                   attachmentNames={attachments.map((item) => item.file.name)}
                   onAsk={submit}
@@ -1123,14 +1287,15 @@ export function AssistantChat({
                 />
               </div>
               {audit && auditChoices.length > 0 ? null : (
-                <RotatingSuggestions prompts={prompts} onPick={submit} />
+                <AssistantSuggestions prompts={prompts} onPick={submit} />
               )}
             </div>
           </div>
         )}
       </div>
       {started ? (
-        <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+        <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
+          <div className="pointer-events-none absolute inset-x-4 -top-10 h-10 bg-gradient-to-t from-background to-transparent" />
           {upgrade ? (
             <div className="mb-2">
               <UpgradeNotice upgrade={upgrade} />
@@ -1145,7 +1310,7 @@ export function AssistantChat({
             input={input}
             setInput={setInput}
             busy={busy}
-            placeholder={composerPlaceholder(interview, audit, imports)}
+            placeholder={composerPlaceholder(interview, audit, imports, true)}
             attachments={composerChips(attachments)}
             attachmentNames={attachments.map((item) => item.file.name)}
             onAsk={submit}
@@ -1170,7 +1335,7 @@ function UpgradeNotice({ upgrade }: { upgrade: AssistantUpgrade }) {
       {upgrade.href ? (
         <Link
           href={upgrade.href}
-          className="font-medium text-primary underline-offset-2 hover:underline"
+          className="font-medium text-foreground underline-offset-2 hover:underline"
         >
           {upgrade.label}
         </Link>
@@ -1185,6 +1350,7 @@ function Composer({
   input,
   setInput,
   busy,
+  roomy = false,
   placeholder,
   attachments,
   attachmentNames,
@@ -1196,6 +1362,7 @@ function Composer({
   input: string
   setInput: (value: string) => void
   busy: boolean
+  roomy?: boolean
   placeholder: string
   attachments: AssistantAttachmentChip[]
   attachmentNames: string[]
@@ -1221,13 +1388,49 @@ function Composer({
         })
       }}
     >
-      <div className="rounded-[1.75rem] border bg-background shadow-sm">
+      <div className="rounded-2xl border border-border bg-background shadow-[0_1px_1px_rgba(0,0,0,0.04)]">
         {attachments.length > 0 ? (
-          <div className="px-2 pt-2">
+          <div className="px-3 pt-3">
             <AssistantAttachmentChips items={attachments} onRemove={onRemove} />
           </div>
         ) : null}
-        <div className="flex items-end gap-1 py-1.5 pr-1.5 pl-1.5">
+        <Textarea
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          onPaste={(event) => {
+            const pasted = filesFromClipboard(event.clipboardData)
+            if (pasted.length > 0) {
+              event.preventDefault()
+              onFiles(pasted, "paste")
+              return
+            }
+            const text = event.clipboardData.getData("text/plain")
+            if (!pasteAsAttachment(text)) return
+            event.preventDefault()
+            onFiles(
+              [
+                new File([text], pastedTextName(attachmentNames), {
+                  type: "text/plain",
+                }),
+              ],
+              "paste"
+            )
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault()
+              onAsk(input)
+            }
+          }}
+          placeholder={placeholder}
+          disabled={busy}
+          rows={roomy ? 2 : 1}
+          aria-label="Message"
+          className={`max-h-40 resize-none border-0 bg-transparent px-4 pt-3 pb-1 text-base leading-6 shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent ${
+            roomy ? "min-h-16" : "min-h-10"
+          }`}
+        />
+        <div className="flex items-center justify-between gap-1 px-2 pb-2">
           <Button
             type="button"
             variant="ghost"
@@ -1244,46 +1447,12 @@ function Composer({
             type="file"
             className="sr-only"
             multiple
-            accept="image/*,.pdf,.txt,.csv,.tsv,.md,.doc,.docx,application/pdf,text/plain,text/csv"
+            accept="image/*,.pdf,.txt,.csv,.tsv,.md,.docx,application/pdf,text/plain,text/csv"
             onChange={(event) => {
               const files = [...(event.target.files ?? [])]
               event.target.value = ""
               if (files.length > 0) onFiles(files, "pick")
             }}
-          />
-          <Textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onPaste={(event) => {
-              const pasted = filesFromClipboard(event.clipboardData)
-              if (pasted.length > 0) {
-                event.preventDefault()
-                onFiles(pasted, "paste")
-                return
-              }
-              const text = event.clipboardData.getData("text/plain")
-              if (!pasteAsAttachment(text)) return
-              event.preventDefault()
-              onFiles(
-                [
-                  new File([text], pastedTextName(attachmentNames), {
-                    type: "text/plain",
-                  }),
-                ],
-                "paste"
-              )
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault()
-                onAsk(input)
-              }
-            }}
-            placeholder={placeholder}
-            disabled={busy}
-            rows={1}
-            aria-label="Message"
-            className="max-h-40 min-h-8 flex-1 resize-none border-0 bg-transparent px-1 py-1 text-base leading-6 shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"
           />
           {busy ? (
             <Button
@@ -1315,12 +1484,14 @@ function Composer({
 function composerPlaceholder(
   interview: boolean,
   audit: boolean,
-  imports: boolean
+  imports: boolean,
+  started: boolean
 ) {
   if (interview) return "Your answer"
   if (audit) return "What should we review?"
   if (imports) return "Ask anything, or paste a staff list"
-  return "Ask anything, or paste a file"
+  if (started) return "Reply"
+  return "How can I help you today?"
 }
 
 function composerChips(items: ComposerFile[]): AssistantAttachmentChip[] {
@@ -1367,6 +1538,7 @@ function releaseAttachments(items: readonly ComposerFile[]) {
 async function loadPolicyFile(flag: { id: string; filename: string }) {
   const response = await fetch(`/api/policies/${flag.id}`)
   if (!response.ok) return null
+  if (isOldWordFile(flag.filename)) return null
   const blob = await response.blob()
   if (blob.size < 1 || blob.size > attachmentByteLimit) return null
   return new File([blob], flag.filename, {

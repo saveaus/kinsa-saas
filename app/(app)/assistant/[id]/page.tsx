@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 
 import { AssistantChat } from "@/components/assistant-chat"
+import { standardsForGroups } from "@/lib/ndis-practice-standards"
 import { can, requireTenant } from "@/lib/tenant"
 import { loginPromptSuggestions } from "@/modules/assistant/login-prompts"
 import { getAssistantChat } from "@/modules/assistant/chats"
@@ -27,6 +28,13 @@ export default async function SavedAssistantPage({
       canAssign={can(context, "workers.manage")}
       canImport={
         can(context, "workers.manage") && can(context, "documents.read_all")
+      }
+      policyStandards={
+        can(context, "settings.manage")
+          ? standardsForGroups(context.organisationRegistrationGroups).map(
+              (standard) => ({ code: standard.code, name: standard.name })
+            )
+          : []
       }
       upgrade={upgrade}
     />

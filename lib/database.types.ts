@@ -13,8 +13,6 @@ export type AppPermission =
   | "documents.approve"
   | "documents.upload_own"
   | "documents.read_all"
-  | "courses.manage"
-  | "courses.take"
   | "reminders.manage"
   | "reports.export"
   | "audit.read"
@@ -22,10 +20,8 @@ export type AppPermission =
 
 export type DocumentApprovalStatus = "pending" | "approved" | "rejected"
 export type WorkerEmploymentStatus = "active" | "inactive"
-export type CoursePublicationStatus = "draft" | "published"
-export type EnrolmentStatus = "assigned" | "in_progress" | "completed"
 export type StaffRole = "support" | "complex_care" | "leader" | "office"
-export type ReminderCategory = "documents" | "courses"
+export type ReminderCategory = "documents"
 export type PolicyRecordStatus = "draft" | "accepted"
 export type PolicyDrafter = "person" | "assistant"
 export type ParticipantRecordKind = "service_agreement" | "support_plan"
@@ -209,6 +205,35 @@ export type Database = {
           created_at?: string
         }
         Update: { standard_code?: string }
+        Relationships: []
+      }
+      internal_audit_rating_proposals: {
+        Row: {
+          id: string
+          organisation_id: string
+          assignment_id: string
+          user_id: string
+          rating: string
+          summary: string
+          created_at: string
+          used_at: string | null
+          cancelled_at: string | null
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          assignment_id: string
+          user_id: string
+          rating: string
+          summary: string
+          created_at?: string
+          used_at?: string | null
+          cancelled_at?: string | null
+        }
+        Update: {
+          used_at?: string | null
+          cancelled_at?: string | null
+        }
         Relationships: []
       }
       internal_audit_assessments: {
@@ -410,6 +435,7 @@ export type Database = {
           file_id: string | null
           compliance_flagged: boolean
           compliance_note: string | null
+          supersedes_policy_id: string | null
           created_by: string | null
           accepted_by: string | null
           accepted_at: string | null
@@ -434,6 +460,7 @@ export type Database = {
           file_id?: string | null
           compliance_flagged?: boolean
           compliance_note?: string | null
+          supersedes_policy_id?: string | null
           created_by?: string | null
           accepted_by?: string | null
           accepted_at?: string | null
@@ -776,6 +803,8 @@ export type Database = {
           mime_type: string | null
           file_size_bytes: number | null
           due_on: string | null
+          completed_at: string | null
+          completed_by: string | null
           remind: boolean
           reminded_at: string | null
           drafted_by: PolicyDrafter
@@ -801,6 +830,8 @@ export type Database = {
           due_on?: string | null
           remind?: boolean
           reminded_at?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           drafted_by?: PolicyDrafter
           created_by?: string | null
           accepted_by?: string | null
@@ -811,6 +842,8 @@ export type Database = {
           accepted_by?: string | null
           accepted_at?: string | null
           reminded_at?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
         }
         Relationships: []
       }
@@ -881,169 +914,6 @@ export type Database = {
         }
         Relationships: []
       }
-      courses: {
-        Row: {
-          id: string
-          organisation_id: string
-          title: string
-          description: string | null
-          status: CoursePublicationStatus
-          pass_mark: number
-          required: boolean
-          cover_image: string | null
-          renewal_months: number | null
-          code: string | null
-          audience: string | null
-          standards: string | null
-          requirement_status: string | null
-          kind: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          organisation_id: string
-          title: string
-          description?: string | null
-          status?: CoursePublicationStatus
-          pass_mark?: number
-          required?: boolean
-          cover_image?: string | null
-          renewal_months?: number | null
-          code?: string | null
-          audience?: string | null
-          standards?: string | null
-          requirement_status?: string | null
-          kind?: string
-        }
-        Update: {
-          organisation_id?: string
-          title?: string
-          description?: string | null
-          status?: CoursePublicationStatus
-          pass_mark?: number
-          required?: boolean
-          cover_image?: string | null
-          renewal_months?: number | null
-          code?: string | null
-          audience?: string | null
-          standards?: string | null
-          requirement_status?: string | null
-          kind?: string
-        }
-        Relationships: []
-      }
-      course_modules: {
-        Row: {
-          id: string
-          organisation_id: string
-          course_id: string
-          title: string
-          body_markdown: string
-          sort_order: number
-          quiz: Json | null
-          content: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          organisation_id: string
-          course_id: string
-          title: string
-          body_markdown?: string
-          sort_order?: number
-          quiz?: Json | null
-          content?: Json | null
-        }
-        Update: {
-          organisation_id?: string
-          course_id?: string
-          title?: string
-          body_markdown?: string
-          sort_order?: number
-          quiz?: Json | null
-          content?: Json | null
-        }
-        Relationships: []
-      }
-      enrolments: {
-        Row: {
-          id: string
-          organisation_id: string
-          course_id: string
-          worker_id: string
-          status: EnrolmentStatus
-          assigned_at: string
-          completed_at: string | null
-        }
-        Insert: {
-          organisation_id: string
-          course_id: string
-          worker_id: string
-        }
-        Update: { status?: EnrolmentStatus; completed_at?: string | null }
-        Relationships: []
-      }
-      completions: {
-        Row: {
-          id: string
-          organisation_id: string
-          enrolment_id: string
-          course_module_id: string
-          passed: boolean
-          score: number | null
-          answers: Json | null
-          attempt_count: number
-          completed_at: string
-        }
-        Insert: {
-          organisation_id: string
-          enrolment_id: string
-          course_module_id: string
-          passed: boolean
-          score?: number | null
-          answers?: Json | null
-          attempt_count?: number
-        }
-        Update: {
-          passed?: boolean
-          score?: number | null
-          answers?: Json | null
-          attempt_count?: number
-        }
-        Relationships: []
-      }
-      lesson_progress: {
-        Row: {
-          id: string
-          organisation_id: string
-          enrolment_id: string
-          course_module_id: string
-          step_index: number
-          updated_at: string
-        }
-        Insert: {
-          organisation_id: string
-          enrolment_id: string
-          course_module_id: string
-          step_index?: number
-        }
-        Update: { step_index?: number }
-        Relationships: []
-      }
-      course_role_requirements: {
-        Row: {
-          organisation_id: string
-          course_id: string
-          staff_role: string
-        }
-        Insert: {
-          organisation_id: string
-          course_id: string
-          staff_role: string
-        }
-        Update: { staff_role?: string }
-        Relationships: []
-      }
       document_role_requirements: {
         Row: {
           organisation_id: string
@@ -1063,6 +933,8 @@ export type Database = {
           id: string
           organisation_id: string
           category: ReminderCategory
+          document_type_version_id: string | null
+          document_id: string | null
           days_before: number
           subject: string
           body_template: string
@@ -1072,6 +944,8 @@ export type Database = {
         Insert: {
           organisation_id: string
           category: ReminderCategory
+          document_type_version_id: string | null
+          document_id: string | null
           days_before: number
           subject: string
           body_template: string
@@ -1079,6 +953,8 @@ export type Database = {
         Update: {
           organisation_id?: string
           category?: ReminderCategory
+          document_type_version_id?: string | null
+          document_id?: string | null
           days_before?: number
           subject?: string
           body_template?: string
@@ -1091,7 +967,6 @@ export type Database = {
           organisation_id: string
           reminder_rule_id: string
           document_id: string | null
-          enrolment_id: string | null
           worker_id: string
           due_on: string
           sent_at: string
@@ -1100,7 +975,6 @@ export type Database = {
           organisation_id: string
           reminder_rule_id: string
           document_id?: string | null
-          enrolment_id?: string | null
           worker_id: string
           due_on: string
         }
@@ -1184,6 +1058,10 @@ export type Database = {
         Args: { org_name: string; p_registration_groups?: string[] }
         Returns: string
       }
+      current_user_is_inactive: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       peek_invite: {
         Args: { p_token_hash: string }
         Returns: { email: string; expires_at: string }[]
@@ -1213,13 +1091,37 @@ export type Database = {
         Args: { p_organisation_id: string; p_tokens: number }
         Returns: number
       }
+      settle_assistant_tokens: {
+        Args: {
+          p_organisation_id: string
+          p_claimed: number
+          p_actual: number
+          p_claimed_at: string
+        }
+        Returns: undefined
+      }
+      append_interview_messages: {
+        Args: {
+          p_chat_id: string
+          p_organisation_id: string
+          p_user_id: string
+          p_messages: Json
+        }
+        Returns: boolean
+      }
+      confirm_interview_rating: {
+        Args: {
+          p_proposal_id: string
+          p_organisation_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_permission: AppPermission
       app_role: AppRole
-      course_publication_status: CoursePublicationStatus
       document_approval_status: DocumentApprovalStatus
-      enrolment_status: EnrolmentStatus
       reminder_category: ReminderCategory
       policy_record_status: PolicyRecordStatus
       participant_record_kind: ParticipantRecordKind

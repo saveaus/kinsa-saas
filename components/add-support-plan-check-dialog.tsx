@@ -26,12 +26,23 @@ export function AddSupportPlanCheckDialog({
   participants = [],
   plans,
   participantId,
+  open: openProp,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   participants?: { id: string; name: string }[]
   plans: SupportPlanOption[]
   participantId?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = openProp ?? localOpen
+  function setOpen(next: boolean) {
+    if (openProp === undefined) setLocalOpen(next)
+    onOpenChange?.(next)
+  }
   const [personId, setPersonId] = useState(participantId ?? "")
   const fieldId = (name: string) => `support_plan_check_${name}`
   const available = plans.filter((plan) => plan.participantId === personId)
@@ -47,14 +58,16 @@ export function AddSupportPlanCheckDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button size="sm" variant={participantId ? "outline" : "default"} />
-        }
-      >
-        {participantId ? null : <Plus />}
-        {participantId ? "Add" : "Add check"}
-      </DialogTrigger>
+      {hideTrigger ? null : (
+        <DialogTrigger
+          render={
+            <Button size="sm" variant={participantId ? "outline" : "default"} />
+          }
+        >
+          {participantId ? null : <Plus />}
+          {participantId ? "Add" : "Add check"}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add support plan check</DialogTitle>

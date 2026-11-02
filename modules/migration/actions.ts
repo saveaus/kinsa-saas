@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { revalidateCompliance } from "@/lib/revalidate-compliance"
 import { requirePermission, requireTenant } from "@/lib/tenant"
 import { reviewUploadedDocument } from "@/modules/documents/assist"
+import { staffError } from "@/modules/billing/guard"
 import { syncSubscriptionSeats } from "@/modules/billing/stripe"
 import { addStaff, placeRecords, previewCertificateNames } from "@/modules/migration/run"
 import { parseRoster, type RosterRow } from "@/modules/migration/roster"
@@ -39,6 +40,8 @@ export async function commitStaffAction(
 ) {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
+  const closed = await staffError(context)
+  if (closed) return { error: closed, added: [], alreadyHere: 0, failed: 0 }
   const teams = await listTeams(context)
   const result = await addStaff({
     organisationId: context.organisationId,
@@ -66,6 +69,10 @@ export async function commitCertificatesAction(formData: FormData) {
   const { context } = await requireTenant()
   requirePermission(context, "workers.manage")
   requirePermission(context, "documents.read_all")
+  const closed = await staffError(context)
+  if (closed) {
+    return { error: closed, documentsFiled: 0, failed: [] as string[], left: [] as number[] }
+  }
   const result = await placeRecords({
     organisationId: context.organisationId,
     userId: context.userId,

@@ -1,14 +1,15 @@
 import { RecordTable, type RecordRow } from "@/components/record-table"
 import { personName } from "@/lib/person-name"
 import { buttonVariants } from "@/components/ui/button"
+import { registeredWall } from "@/components/registered-wall"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { listWorkers } from "@/modules/workers/queries"
 
 export default async function ReportsPage() {
   const { context } = await requireTenant()
   requirePermission(context, "reports.export")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const workers = await listWorkers(context)
 
   const rows: RecordRow[] = workers.map((worker) => ({
@@ -36,9 +37,9 @@ export default async function ReportsPage() {
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
-        Download one pack for an auditor to sample: policies, credentials,
-        courses, support plans, service agreements, and records still waiting
-        for acceptance. This is evidence, not a guarantee of an audit outcome.
+        Download one pack for an auditor: the checklist, policies, participant
+        files, registers, logs, worker documents, and internal audit findings.
+        This is evidence, not a guarantee of an audit outcome.
       </p>
       <RecordTable
         title="Evidence export"

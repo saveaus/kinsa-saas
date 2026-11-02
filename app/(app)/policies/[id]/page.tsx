@@ -4,11 +4,11 @@ import { ActionForm } from "@/components/action-form"
 import { BackLink } from "@/components/back-link"
 import { PolicyFlagLink } from "@/components/policy-flag"
 import { PolicyPdf } from "@/components/policy-pdf"
+import { registeredWall } from "@/components/registered-wall"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/format-date"
 import { practiceStandardName } from "@/lib/ndis-practice-standards"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { acknowledgePolicyAction } from "@/modules/policies/actions"
 import { policyDocxType } from "@/modules/policies/attachments"
 import { categoryLabel, policyCategory } from "@/modules/policies/categories"
@@ -27,7 +27,8 @@ export default async function PolicyPage({
   const { id } = await params
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const [policy, acknowledgement] = await Promise.all([
     getPolicy(context, id),
     getPolicyAcknowledgement(context, id),

@@ -50,14 +50,14 @@ export function AuditFindingCard({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+            className="rounded-md border border-foreground bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:bg-foreground/90"
             onClick={onConfirm}
           >
             Confirm
           </button>
           <button
             type="button"
-            className="rounded-md border px-2.5 py-1 text-xs"
+            className="rounded-md border border-border bg-background px-2.5 py-1 text-xs text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
             onClick={onCancel}
           >
             Cancel

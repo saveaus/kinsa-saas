@@ -4,8 +4,8 @@ import { AddPolicyFileDialog } from "@/components/add-policy-file-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { countPhrase, PolicyFolders } from "@/components/policy-folders"
 import { buttonVariants } from "@/components/ui/button"
+import { registeredWall } from "@/components/registered-wall"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import {
   categoryLabel,
   isPolicyCategory,
@@ -19,7 +19,8 @@ import { cn } from "cn"
 export default async function PoliciesPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const registrationGroups = context.organisationRegistrationGroups
   const sections = policySections(registrationGroups)
   const [policies, files] =

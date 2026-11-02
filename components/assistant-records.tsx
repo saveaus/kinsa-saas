@@ -55,7 +55,7 @@ function RecordRows({
           <Chip tone={recordTone(item.status)}>{packStatusLabel(item.status)}</Chip>
           <button
             type="button"
-            className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04)] hover:bg-muted"
             onClick={() => onAsk(`What should I do about ${item.label}?`)}
           >
             Ask

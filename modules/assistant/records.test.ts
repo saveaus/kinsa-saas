@@ -42,11 +42,11 @@ describe("selectRecords", () => {
     const card = selectRecords(
       [
         item({ key: "a", label: "Complaints" }),
-        item({ key: "b", label: "Jo Chen · First aid", area: "course", status: "missing" }),
+        item({ key: "b", label: "Jo Chen · First aid", area: "clearance", status: "missing" }),
       ],
-      { area: "course" }
+      { area: "clearance" }
     )
-    assert.equal(card.title, "Open course items")
+    assert.equal(card.title, "Open credential items")
     assert.deepEqual(card.items.map((row) => row.label), ["Jo Chen · First aid"])
   })
 

@@ -20,14 +20,25 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/reminders",
-        destination: "/settings/emails",
+        destination: "/workflows",
         permanent: false,
       },
       {
         source: "/settings/reminders",
-        destination: "/settings/emails",
+        destination: "/workflows",
         permanent: false,
       },
+      {
+        source: "/settings/emails",
+        destination: "/workflows",
+        permanent: false,
+      },
+      { source: "/courses", destination: "/workers", permanent: false },
+      { source: "/courses/:path*", destination: "/workers", permanent: false },
+      { source: "/me/courses", destination: "/me", permanent: false },
+      { source: "/me/courses/:path*", destination: "/me", permanent: false },
+      { source: "/settings/courses", destination: "/settings", permanent: false },
+      { source: "/certificates/:path*", destination: "/workers", permanent: false },
       {
         source: "/settings/logs",
         destination: "/settings/general",

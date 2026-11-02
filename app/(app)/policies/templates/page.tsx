@@ -4,8 +4,8 @@ import { BackLink } from "@/components/back-link"
 import { EmptyState } from "@/components/empty-state"
 import { countPhrase, PolicyFolders } from "@/components/policy-folders"
 import { buttonVariants } from "@/components/ui/button"
+import { registeredWall } from "@/components/registered-wall"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { policySections } from "@/modules/policies/categories"
 import { templatesForOrganisation } from "@/modules/policies/templates"
 import { cn } from "cn"
@@ -13,7 +13,8 @@ import { cn } from "cn"
 export default async function PolicyTemplatesPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const registrationGroups = context.organisationRegistrationGroups
   const templates = templatesForOrganisation(registrationGroups)
   const folders = policySections(registrationGroups)

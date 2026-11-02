@@ -1,6 +1,11 @@
 export const attachmentCountLimit = 8
 export const attachmentByteLimit = 3 * 1024 * 1024
-export const attachmentTotalLimit = 8 * 1024 * 1024
+/** Files travel as base64 in the chat request, which Vercel caps near 4.5 MB. */
+export const attachmentTotalLimit = 3 * 1024 * 1024
+/** Each filing request is a server action, under the same Vercel cap. */
+export const certificateBatchBytes = 4 * 1024 * 1024
+export const certificateBatchFiles = 12
+const certificateFormOverhead = 1024
 
 export type AssistantAttachment = {
   name: string
@@ -48,6 +53,10 @@ export function acceptAttachments(
       rejected.push(`${name} is empty.`)
       continue
     }
+    if (isOldWordFile(name)) {
+      rejected.push(oldWordMessage(name))
+      continue
+    }
     if (file.size > attachmentByteLimit) {
       rejected.push(`${name} is over 3 MB.`)
       continue
@@ -57,7 +66,7 @@ export function acceptAttachments(
       break
     }
     if (total + file.size > attachmentTotalLimit) {
-      rejected.push("Those files are over 8 MB together.")
+      rejected.push("Those files are over 3 MB together.")
       break
     }
     accepted.push(index)
@@ -65,6 +74,31 @@ export function acceptAttachments(
     total += file.size
   }
   return { accepted, rejected }
+}
+
+export function isOldWordFile(name: string) {
+  return /\.doc$/i.test(name.trim())
+}
+
+export function oldWordMessage(name: string) {
+  return `${name} is an old Word file. Save it as .docx or PDF and attach it again.`
+}
+
+/** How many of the leading files fit one request. 0 means the first is too large to send. */
+export function certificateBatchSize(sizes: readonly number[]) {
+  let total = 0
+  let count = 0
+  for (const size of sizes) {
+    if (count >= certificateBatchFiles) break
+    total += size + certificateFormOverhead
+    if (total > certificateBatchBytes) break
+    count += 1
+  }
+  return count
+}
+
+export function certificateTooLarge(size: number) {
+  return size + certificateFormOverhead > certificateBatchBytes
 }
 
 export function attachmentLabel(file: { name: string; mediaType: string; size: number }) {

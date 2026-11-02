@@ -99,6 +99,47 @@ export async function createParticipantAction(
   return { message: "Participant added." }
 }
 
+export async function updateParticipantAction(
+  participantId: string,
+  _prev: ParticipantActionState,
+  formData: FormData
+): Promise<ParticipantActionState> {
+  const { context } = await requireTenant()
+  requirePermission(context, "settings.manage")
+  const closed = await registeredError(context)
+  if (closed) return { error: closed }
+
+  const name = cleanName(formData.get("name"))
+  const ndisNumber = String(formData.get("ndis_number") ?? "").trim()
+  if (name.length < 1 || name.length > 80) {
+    return { error: "Enter a name up to 80 characters." }
+  }
+  if (!/^\d{9}$/.test(ndisNumber)) {
+    return { error: "Enter the 9 digit NDIS number." }
+  }
+
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from("participants")
+    .update({ name, ndis_number: ndisNumber })
+    .eq("id", participantId)
+    .eq("organisation_id", context.organisationId)
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "A participant with that NDIS number is already on the list." }
+    }
+    return { error: error.message }
+  }
+  if (!data) return { error: "That participant is no longer on the list." }
+
+  await recordAudit("participant.updated", "participant", participantId, { name })
+  refresh(participantId)
+  return { message: "Participant updated." }
+}
+
 export async function setParticipantActiveAction(
   participantId: string,
   active: boolean,
@@ -173,7 +214,15 @@ export async function deleteParticipantAction(
     .eq("organisation_id", context.organisationId)
 
   if (logError) return { error: logError.message }
+  // Log entries also name people here, and that link blocks the final delete.
+  const { count: namedOnLogs, error: peopleError } = await supabase
+    .from("log_entry_people")
+    .select("id", { count: "exact", head: true })
+    .eq("participant_id", participantId)
+    .eq("organisation_id", context.organisationId)
+  if (peopleError) return { error: peopleError.message }
   if (
+    namedOnLogs ||
     files?.some((file) => file.status === "accepted") ||
     incidents?.some((incident) => incident.status === "accepted") ||
     checks?.some((check) => check.status === "accepted") ||

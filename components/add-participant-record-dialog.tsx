@@ -48,11 +48,22 @@ function recordCopy(kind: ParticipantRecordKind) {
 export function AddParticipantRecordDialog({
   participantId,
   kind,
+  open: openProp,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   participantId: string
   kind: ParticipantRecordKind
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = openProp ?? localOpen
+  function setOpen(next: boolean) {
+    if (openProp === undefined) setLocalOpen(next)
+    onOpenChange?.(next)
+  }
   const copy = recordCopy(kind)
 
   async function addRecord(prev: ParticipantActionState, formData: FormData) {
@@ -63,9 +74,11 @@ export function AddParticipantRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
-        {copy.button}
-      </DialogTrigger>
+      {hideTrigger ? null : (
+        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+          {copy.button}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>

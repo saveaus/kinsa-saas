@@ -23,7 +23,6 @@ export type ExpiryWeek = {
   start: string
   label: string
   documents: number
-  courses: number
 }
 
 export type ApprovalAge = {
@@ -69,7 +68,6 @@ export function expiryHorizon(
       start: format(start, "yyyy-MM-dd"),
       label: format(start, "d MMM"),
       documents: 0,
-      courses: 0,
     }
   })
 
@@ -84,8 +82,7 @@ export function expiryHorizon(
       })
       const week = weeks[index]
       if (!week) continue
-      if (item.kind === "document") week.documents += 1
-      else week.courses += 1
+      week.documents += 1
     }
   }
 

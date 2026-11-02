@@ -55,6 +55,11 @@ export async function getTenantContext(): Promise<TenantContext | null> {
     .maybeSingle()
 
   if (!membership) {
+    const { data: inactive } = await supabase.rpc("current_user_is_inactive")
+    if (inactive) {
+      await supabase.auth.signOut()
+      redirect("/login?error=inactive")
+    }
     return null
   }
 

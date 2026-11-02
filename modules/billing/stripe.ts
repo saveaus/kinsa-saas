@@ -246,6 +246,20 @@ export function planFromSubscription(subscription: Stripe.Subscription) {
   return isBillingPlan(metadataPlan) ? metadataPlan : null
 }
 
+export async function hasLiveSubscription(customerId: string) {
+  const stripe = stripeClient()
+  if (!stripe) return false
+  const { data } = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  })
+  return data.some(
+    (subscription) =>
+      mapStripeStatus(subscription.status) !== "canceled"
+  )
+}
+
 export async function syncSubscriptionSeats(organisationId: string) {
   const stripe = stripeClient()
   if (!stripe) return
@@ -270,6 +284,7 @@ export async function syncSubscriptionSeats(organisationId: string) {
     if (!subscriptionId) return
 
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    if (subscription.status === "canceled") return
     const item = subscription.items.data[0]
     const quantity = billedSeats(count ?? 0)
     if (!item || item.quantity === quantity) return
@@ -298,6 +313,21 @@ export async function applySubscription(
     ? new Date(subscription.trial_end * 1000).toISOString()
     : null
 
+  // Ending an old subscription must not disturb the one the provider is on now.
+  if (status === "canceled") {
+    const current = organisationId
+      ? admin.from("organisations").select("stripe_subscription_id").eq("id", organisationId)
+      : admin.from("organisations").select("stripe_subscription_id").eq("stripe_customer_id", customerId)
+    const { data: organisation, error: currentError } = await current.maybeSingle()
+    if (currentError) throw new Error(currentError.message)
+    if (
+      organisation?.stripe_subscription_id &&
+      organisation.stripe_subscription_id !== subscription.id
+    ) {
+      return
+    }
+  }
+
   let update = admin
     .from("organisations")
     .update({
@@ -324,4 +354,6 @@ export async function applySubscription(
     target_id: data.id,
     metadata: { plan, status },
   })
+
+  await syncSubscriptionSeats(data.id)
 }

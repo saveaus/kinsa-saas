@@ -1,4 +1,6 @@
-import { isBefore, parseISO, startOfToday } from "date-fns"
+import { isBefore, parseISO } from "date-fns"
+
+import { today as appToday } from "@/lib/today"
 
 export type ParticipantRecordKind = "service_agreement" | "support_plan"
 export type ParticipantRecordStatus = "draft" | "accepted"
@@ -31,7 +33,7 @@ function dateFor(kind: ParticipantRecordKind, record: DatedParticipantRecord) {
 export function documentStanding(
   kind: ParticipantRecordKind,
   records: DatedParticipantRecord[],
-  today = startOfToday()
+  today = appToday()
 ): ParticipantDocumentStanding {
   const matching = records.filter((record) => record.kind === kind)
   const accepted = matching.filter((record) => record.status === "accepted")

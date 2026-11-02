@@ -15,7 +15,8 @@ import { isValidAbn, parseAbn } from "@/lib/abn"
 import type { NdisRegistrationGroupCode } from "@/lib/ndis-registration-groups"
 import { createOrganisationAction } from "@/modules/identity/actions"
 
-const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp"])
+const LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp"]
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
 type Step = "details" | "groups"
@@ -31,6 +32,7 @@ export function OnboardingPanel() {
   const [pending, setPending] = useState(false)
   const logoRef = useRef<HTMLInputElement>(null)
   const logoUrlRef = useRef<string | null>(null)
+  const logoFileRef = useRef<File | null>(null)
 
   useEffect(() => {
     return () => {
@@ -40,14 +42,25 @@ export function OnboardingPanel() {
 
   function replaceLogo(file: File | null) {
     if (logoUrlRef.current) URL.revokeObjectURL(logoUrlRef.current)
+    logoFileRef.current = file
     const next = file ? URL.createObjectURL(file) : null
     logoUrlRef.current = next
     setLogoUrl(next)
   }
 
+  function attachLogo(form: HTMLFormElement) {
+    const file = logoFileRef.current
+    const input = form.elements.namedItem("logo")
+    if (!file || !(input instanceof HTMLInputElement)) return
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    input.files = transfer.files
+  }
+
   function onLogoChange(file: File | undefined) {
     if (!file) return
-    if (!LOGO_TYPES.has(file.type)) {
+    const named = file.name.toLowerCase()
+    if (!LOGO_TYPES.has(file.type) && !LOGO_EXTENSIONS.some((extension) => named.endsWith(extension))) {
       setNotice("Use a PNG, JPG, GIF, or WebP image.")
       if (logoRef.current) logoRef.current.value = ""
       return
@@ -90,22 +103,18 @@ export function OnboardingPanel() {
   return (
     <AuthFrame
       step={step === "details" ? "2/3" : "3/3"}
-      title={step === "details" ? "Create your organisation" : "Which services do you deliver?"}
+      title={step === "details" ? "Create your organisation" : "Registration groups"}
       description={
         step === "details"
-          ? "The name and logo appear in the workspace and on training certificates."
-          : "Workers and evidence stay scoped to the registration groups you hold. You can change these later in Settings."
+          ? "The name and logo appear in the workspace."
+          : undefined
       }
+      wide={step === "groups"}
       onBack={step === "groups" ? () => setStep("details") : undefined}
       preview={
-        <OrganisationPreview
-          name={name}
-          logoUrl={logoUrl}
-          registrationGroups={groups}
-          abn={abn}
-          registrationNumber={registrationNumber}
-          focus={step === "details" ? "workspace" : "groups"}
-        />
+        step === "details" ? (
+          <OrganisationPreview name={name} logoUrl={logoUrl} />
+        ) : undefined
       }
     >
       <ActionForm
@@ -114,6 +123,8 @@ export function OnboardingPanel() {
         pendingLabel="Creating organisation..."
         hideSubmit
         className="gap-4"
+        hardNavigate
+        prepareForm={attachLogo}
         onPendingChange={setPending}
       >
         <div className={step === "details" ? "grid gap-4" : "hidden"}>

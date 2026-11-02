@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/supabase/fetch-all"
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { TenantContext } from "@/lib/tenant"
 import type { IncidentKind, IncidentStatus } from "@/modules/incidents/standing"
@@ -20,14 +21,19 @@ export async function listIncidents(
   kind?: IncidentKind
 ) {
   const supabase = await createServerSupabase()
-  let query = supabase
-    .from("incidents")
-    .select(
-      "id, kind, summary, occurred_on, participant_id, status, original_filename, mime_type, drafted_by"
-    )
-    .eq("organisation_id", context.organisationId)
-  if (kind) query = query.eq("kind", kind)
-  const { data, error } = await query.order("occurred_on", { ascending: false })
+  const { data, error } = await fetchAll((from, to) => {
+    let query = supabase
+      .from("incidents")
+      .select(
+        "id, kind, summary, occurred_on, participant_id, status, original_filename, mime_type, drafted_by"
+      )
+      .eq("organisation_id", context.organisationId)
+    if (kind) query = query.eq("kind", kind)
+    return query
+      .order("occurred_on", { ascending: false })
+      .order("id")
+      .range(from, to)
+  })
 
   if (error) throw new Error(error.message)
   return withParticipantNames(data ?? [])

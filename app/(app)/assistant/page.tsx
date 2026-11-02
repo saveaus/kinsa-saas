@@ -1,6 +1,9 @@
 import { AssistantChat } from "@/components/assistant-chat"
 import { ndisUpdate, ndisUpdatePrompt } from "@/lib/ndis-updates"
-import { practiceStandardName } from "@/lib/ndis-practice-standards"
+import {
+  practiceStandardName,
+  standardsForGroups,
+} from "@/lib/ndis-practice-standards"
 import { can, requireTenant } from "@/lib/tenant"
 import { loginPromptSuggestions } from "@/modules/assistant/login-prompts"
 import { loadAssistantUpgrade } from "@/modules/assistant/usage"
@@ -36,6 +39,13 @@ export default async function AssistantPage({
       canAssign={can(context, "workers.manage")}
       canImport={
         can(context, "workers.manage") && can(context, "documents.read_all")
+      }
+      policyStandards={
+        can(context, "settings.manage")
+          ? standardsForGroups(context.organisationRegistrationGroups).map(
+              (standard) => ({ code: standard.code, name: standard.name })
+            )
+          : []
       }
       upgrade={upgrade}
     />

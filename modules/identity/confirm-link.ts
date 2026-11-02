@@ -10,7 +10,13 @@ export function isAuthEmailType(value: string | null): value is AuthEmailType {
 }
 
 export function safeNext(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+  // Browsers strip tabs and newlines, so "/\t/evil.com" would leave the site.
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    /[\u0000-\u001f\u007f\\]/.test(value)
+  ) {
     return "/onboarding"
   }
   return value

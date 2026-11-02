@@ -3,8 +3,8 @@ import { EmptyState } from "@/components/empty-state"
 import type { LogPersonOption } from "@/components/log-person-field"
 import { countPhrase, PolicyFolders } from "@/components/policy-folders"
 import { personName } from "@/lib/person-name"
+import { registeredWall } from "@/components/registered-wall"
 import { requirePermission, requireTenant } from "@/lib/tenant"
-import { requireRegistered } from "@/modules/billing/guard"
 import { listCustomLogs } from "@/modules/logs/queries"
 import { logFileHref, logPlaceLabel } from "@/modules/logs/standing"
 import { listParticipants } from "@/modules/participants/queries"
@@ -13,7 +13,8 @@ import { listWorkers } from "@/modules/workers/queries"
 export default async function LogsPage() {
   const { context } = await requireTenant()
   requirePermission(context, "settings.manage")
-  await requireRegistered(context)
+  const wall = await registeredWall(context)
+  if (wall) return wall
   const [logs, workers, participants] = await Promise.all([
     listCustomLogs(context),
     listWorkers(context),

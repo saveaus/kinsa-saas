@@ -3,8 +3,10 @@ import { redirect } from "next/navigation"
 import { BillingSettings } from "@/components/billing-settings"
 import { SettingsFrame } from "@/components/settings-frame"
 import { can, requireTenant } from "@/lib/tenant"
-import { assistantAllowance } from "@/modules/assistant/allowance"
-import { assistantTokensUsed } from "@/modules/assistant/usage"
+import {
+  assistantTokensUsed,
+  loadAssistantAllowance,
+} from "@/modules/assistant/usage"
 import {
   billedSeats,
   isBillingPlan,
@@ -25,16 +27,12 @@ export default async function BillingSettingsPage({
   if (!can(context, "settings.manage")) redirect("/settings/password")
 
   const params = await searchParams
-  const [billing, activeWorkers, assistantUsed] = await Promise.all([
+  const [billing, activeWorkers, assistantUsed, allowance] = await Promise.all([
     getOrganisationBilling(context.organisationId),
     countActiveWorkers(context.organisationId),
     assistantTokensUsed(context.organisationId),
+    loadAssistantAllowance(context.organisationId),
   ])
-  const allowance = assistantAllowance({
-    billing,
-    tokensUsed: assistantUsed,
-    stripeConfigured: stripeConfigured(),
-  })
 
   return (
     <SettingsFrame href="/settings/billing" wide>
@@ -49,7 +47,9 @@ export default async function BillingSettingsPage({
         daysLeft={trialDaysRemaining(billing.trialEndsAt)}
         connected={stripeConfigured()}
         hasCustomer={Boolean(billing.stripeCustomerId)}
-        hasSubscription={Boolean(billing.stripeSubscriptionId)}
+        hasSubscription={
+          Boolean(billing.stripeSubscriptionId) && billing.status !== "canceled"
+        }
         checkout={params.checkout}
         assistantUsed={assistantUsed}
         assistantAllowance={allowance}

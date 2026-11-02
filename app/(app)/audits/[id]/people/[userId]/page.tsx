@@ -1,17 +1,13 @@
-import { notFound, redirect } from "next/navigation"
-import { ClipboardCheck } from "lucide-react"
+import { notFound } from "next/navigation"
 
 import { AuditRatingMenu } from "@/components/audit-rating-menu"
 import { BackLink } from "@/components/back-link"
 import { Chip, type ChipTone } from "@/components/chip"
-import { EmptyState } from "@/components/empty-state"
+import { registeredWall } from "@/components/registered-wall"
 import { StartInterviewButton } from "@/components/start-interview-button"
 import { findCriterion } from "@/lib/audit-catalogue"
 import { practiceStandardName } from "@/lib/ndis-practice-standards"
-import { can, requireTenant } from "@/lib/tenant"
-import { allowsRegistered } from "@/modules/billing/access"
-import { getOrganisationBilling } from "@/modules/billing/queries"
-import { stripeConfigured } from "@/modules/billing/stripe"
+import { can, requireTenant, type TenantContext } from "@/lib/tenant"
 import {
   getInternalAudit,
   listAuditAssignments,
@@ -34,22 +30,22 @@ export default async function InternalAuditPersonPage({
 }: {
   params: Promise<{ id: string; userId: string }>
 }) {
-  const { id, userId } = await params
   const { context } = await requireTenant()
+  const wall = await registeredWall(context)
+  if (wall) return wall
+  return <InternalAuditPersonContent context={context} params={params} />
+}
+
+async function InternalAuditPersonContent({
+  context,
+  params,
+}: {
+  context: TenantContext
+  params: Promise<{ id: string; userId: string }>
+}) {
+  const { id, userId } = await params
   const manage = can(context, "settings.manage")
   if (!manage && userId !== context.userId) notFound()
-
-  const billing = await getOrganisationBilling(context.organisationId)
-  if (!allowsRegistered(billing, new Date(), stripeConfigured())) {
-    if (manage) redirect("/settings/billing")
-    return (
-      <EmptyState
-        icon={<ClipboardCheck className="size-4" />}
-        title="Internal audits are unavailable"
-        description="They are part of the Registered plan."
-      />
-    )
-  }
 
   const audit = await getInternalAudit(context, id)
   if (!audit) notFound()
