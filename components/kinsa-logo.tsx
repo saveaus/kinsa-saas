@@ -2,8 +2,8 @@ import Link from "next/link"
 
 import { cn } from "cn"
 
-const lockup = { src: "/brand/lockup.png", width: 1024, height: 243 }
-const mark = { src: "/brand/mark.png", width: 230, height: 256 }
+const lockup = { src: "/brand/lockup.png", width: 1024, height: 356 }
+const mark = { src: "/brand/mark.png", width: 356, height: 356 }
 
 export function KinsaLogo({
   variant = "lockup",
